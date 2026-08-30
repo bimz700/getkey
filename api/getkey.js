@@ -1,118 +1,181 @@
-const { Redis } = require('@upstash/redis');
-const fs = require('fs');
-const path = require('path');
+import { Redis } from '@upstash/redis';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Inisialisasi Upstash Redis Client dari Environment Variables
 const redis = Redis.fromEnv();
 
-module.exports = async (req, res) => {
-  // CORS Headers
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Device-Identifier');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, X-Device-Identifier'
+  );
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({
+      success: false,
+      message: 'METHOD NOT ALLOWED'
+    });
+  }
+
   try {
-    // 1. Ekstrak Identifier (Client Device ID dari Header atau Fallback IP)
-    const clientDeviceId = req.headers['x-device-identifier'];
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-ip';
-    
-    // Gunakan Device ID jika ada, jika tidak gunakan IP
-    const identifier = clientDeviceId ? clientDeviceId.trim() : clientIp.split(',')[0].trim();
+    // ==============================
+    // IDENTIFIER
+    // ==============================
+
+    const deviceHeader = req.headers['x-device-identifier'];
+
+    const forwardedFor = req.headers['x-forwarded-for'];
+
+    const clientIp = forwardedFor
+      ? forwardedFor.split(',')[0].trim()
+      : req.headers['x-real-ip'] ||
+        req.socket?.remoteAddress ||
+        'unknown-ip';
+
+    const identifier = deviceHeader?.trim()
+      ? deviceHeader.trim()
+      : clientIp;
+
     const claimKey = `claim:${identifier}`;
 
-    // 2. Opsi Pengecekan Status Cooldown (digunakan saat Load/Refresh Halaman)
-    if (req.query.action === 'check') {
-      const ttl = await redis.ttl(claimKey);
-      if (ttl > 0) {
-        const savedKey = await redis.get(claimKey);
-        return res.status(200).json({
-          success: false,
-          cooldown: true,
-          remaining: ttl,
-          key: typeof savedKey === 'string' ? savedKey : null
-        });
-      }
-      return res.status(200).json({
-        success: true,
-        cooldown: false,
-        remaining: 0
-      });
-    }
+    // ==============================
+    // CHECK COOLDOWN
+    // ==============================
 
-    // 3. Cek apakah user sedang dalam masa Cooldown sebelum memproses
     const currentTtl = await redis.ttl(claimKey);
+
     if (currentTtl > 0) {
+      const savedKey = await redis.get(claimKey);
+
       return res.status(200).json({
         success: false,
         cooldown: true,
-        remaining: currentTtl
+        remaining: currentTtl,
+        key: savedKey || null
       });
     }
 
-    // 4. Membaca daftar key dari keys.json (ROOT directory)
+    // ==============================
+    // READ KEYS
+    // ==============================
+
     const keysPath = path.join(process.cwd(), 'keys.json');
+
     if (!fs.existsSync(keysPath)) {
+      console.error('keys.json tidak ditemukan');
+
       return res.status(500).json({
         success: false,
-        message: "SERVER ERROR"
+        message: 'SERVER ERROR'
       });
     }
 
     const rawKeys = fs.readFileSync(keysPath, 'utf8');
-    const availableKeys = JSON.parse(rawKeys);
 
-    if (!Array.isArray(availableKeys) || availableKeys.length === 0) {
-      return res.status(200).json({
+    let keys;
+
+    try {
+      keys = JSON.parse(rawKeys);
+    } catch (error) {
+      console.error('keys.json tidak valid:', error);
+
+      return res.status(500).json({
         success: false,
-        message: "ALL KEYS ARE USED"
+        message: 'SERVER ERROR'
       });
     }
 
-    // 5. Cari Key yang Belum Digunakan di Redis (digunakan secara Atomic via SADD)
+    if (!Array.isArray(keys) || keys.length === 0) {
+      return res.status(200).json({
+        success: false,
+        message: 'ALL KEYS ARE USED'
+      });
+    }
+
+    // ==============================
+    // RANDOMIZE KEY
+    // ==============================
+
+    const shuffledKeys = [...keys].sort(
+      () => Math.random() - 0.5
+    );
+
     let selectedKey = null;
 
-    for (const candidateKey of availableKeys) {
-      // SADD mengembalikan 1 jika elemen baru ditambahkan, 0 jika sudah ada di set
-      const isNewKey = await redis.sadd('used_keys_set', candidateKey);
-      if (isNewKey === 1) {
+    // ==============================
+    // RESERVE KEY
+    // ==============================
+
+    for (const candidateKey of shuffledKeys) {
+      const added = await redis.sadd(
+        'used_keys_set',
+        candidateKey
+      );
+
+      if (added === 1) {
         selectedKey = candidateKey;
-        break; // Dapatkan key yang valid dan keluar dari loop
+        break;
       }
     }
 
-    // Jika seluruh key di keys.json sudah ada di used_keys_set
     if (!selectedKey) {
       return res.status(200).json({
         success: false,
-        message: "ALL KEYS ARE USED"
+        message: 'ALL KEYS ARE USED'
       });
     }
 
-    // 6. Kunci User/Device dengan Redis SET NX EX 86400 (Atomic Claim & Anti-Race Condition)
-    // Menyimpan key yang didapat di value claim untuk konsistensi UI jika di-refresh
-    const acquired = await redis.set(claimKey, selectedKey, {
-      nx: true,
-      ex: 86400 // TTL 24 jam (86400 detik)
-    });
+    // ==============================
+    // CREATE 24H CLAIM
+    // ==============================
 
-    // Jika SET NX gagal (karena ada request bersamaan dari device yang sama)
+    const acquired = await redis.set(
+      claimKey,
+      selectedKey,
+      {
+        nx: true,
+        ex: 86400
+      }
+    );
+
+    // ==============================
+    // CLAIM FAILED
+    // ==============================
+
     if (!acquired) {
-      // Kembalikan key ke daftar yang belum dipakai agar tidak terbuang
-      await redis.srem('used_keys_set', selectedKey);
-      
-      const remainingTtl = await redis.ttl(claimKey);
+      await redis.srem(
+        'used_keys_set',
+        selectedKey
+      );
+
+      const remainingTtl = await redis.ttl(
+        claimKey
+      );
+
       return res.status(200).json({
         success: false,
         cooldown: true,
-        remaining: remainingTtl > 0 ? remainingTtl : 86400
+        remaining:
+          remainingTtl > 0
+            ? remainingTtl
+            : 86400
       });
     }
 
-    // 7. Berhasil Mendapatkan Key & Menerapkan Cooldown 24 Jam
+    // ==============================
+    // SUCCESS
+    // ==============================
+
     return res.status(200).json({
       success: true,
       key: selectedKey,
@@ -120,9 +183,11 @@ module.exports = async (req, res) => {
     });
 
   } catch (error) {
+    console.error('GETKEY ERROR:', error);
+
     return res.status(500).json({
       success: false,
-      message: "SERVER ERROR"
+      message: 'SERVER ERROR'
     });
   }
-};
+}
