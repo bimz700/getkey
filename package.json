@@ -1,12 +1,10 @@
 {
   "name": "mz-getkey",
   "version": "1.0.0",
-  "private": true,
-  "type": "module",
+  "description": "Website GET KEY MZMODZ untuk Vercel Deployment",
+  "main": "api/getkey.js",
   "scripts": {
-    "start": "vercel dev"
+    "start": "node api/getkey.js"
   },
-  "dependencies": {
-    "@upstash/redis": "^1.34.3"
-  }
+  "dependencies": {}
 }
