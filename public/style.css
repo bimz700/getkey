@@ -1,117 +1,227 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const getKeyBtn = document.getElementById('getKeyBtn');
-  const copyKeyBtn = document.getElementById('copyKeyBtn');
-  const keyDisplay = document.getElementById('keyDisplay');
-  const statusMessage = document.getElementById('statusMessage');
-  const countdownEl = document.getElementById('countdown');
-  const spinner = document.getElementById('spinner');
-  const btnText = getKeyBtn.querySelector('.btn-text');
+:root {
+  --primary-color: #00ff88;
+  --secondary-color: #00b8ff;
+  --bg-color: #0d0f12;
+  --card-bg: rgba(18, 22, 29, 0.85);
+  --text-color: #ffffff;
+  --text-dim: #94a3b8;
+  --border-color: rgba(0, 255, 136, 0.2);
+}
 
-  let currentKey = '';
-  let countdownTimer = null;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Rajdhani', sans-serif;
+}
 
-  // Event handler tombol GET KEY
-  getKeyBtn.addEventListener('click', async () => {
-    setLoading(true);
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: hidden;
+  padding: 20px;
+}
 
-    try {
-      const response = await fetch('/api/getkey');
-      const data = await response.json();
+.background-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(0, 255, 136, 0.1) 0%, rgba(13, 15, 18, 0.95) 70%);
+  z-index: -1;
+}
 
-      if (data.success) {
-        currentKey = data.key;
-        keyDisplay.textContent = currentKey;
-        statusMessage.textContent = 'KEY GENERATED SUCCESSFULLY';
-        statusMessage.className = 'status-success';
-        copyKeyBtn.disabled = false;
-      } else if (data.cooldown) {
-        statusMessage.textContent = '24 HOUR COOLDOWN';
-        statusMessage.className = 'status-cooldown';
-        startCountdown(data.remaining);
-        getKeyBtn.disabled = true;
-      } else if (data.message === 'ALL KEYS ARE USED') {
-        statusMessage.textContent = 'ALL KEYS ARE USED';
-        statusMessage.className = 'status-warning';
-        getKeyBtn.disabled = true;
-      } else {
-        statusMessage.textContent = data.message || 'FAILED TO GET KEY';
-        statusMessage.className = 'status-warning';
-      }
-    } catch (error) {
-      statusMessage.textContent = 'NETWORK / SERVER ERROR';
-      statusMessage.className = 'status-warning';
-    } finally {
-      setLoading(false);
-    }
-  });
+.container {
+  width: 100%;
+  max-width: 450px;
+}
 
-  // Event handler tombol COPY KEY
-  copyKeyBtn.addEventListener('click', () => {
-    if (!currentKey) return;
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 30px 25px;
+  box-shadow: 0 0 25px rgba(0, 255, 136, 0.15);
+  backdrop-filter: blur(10px);
+  text-align: center;
+}
 
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(currentKey).then(showCopiedStatus);
-    } else {
-      // Fallback untuk browser lama / iFrame
-      const input = document.createElement('input');
-      input.value = currentKey;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
-      showCopiedStatus();
-    }
-  });
+.header {
+  margin-bottom: 20px;
+}
 
-  function showCopiedStatus() {
-    const originalText = statusMessage.textContent;
-    const originalClass = statusMessage.className;
+.brand-title {
+  font-size: 2.8rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-transform: uppercase;
+}
 
-    statusMessage.textContent = 'KEY COPIED TO CLIPBOARD';
-    statusMessage.className = 'status-success';
+.subtitle {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  letter-spacing: 3px;
+  margin-top: -5px;
+}
 
-    setTimeout(() => {
-      statusMessage.textContent = originalText;
-      statusMessage.className = originalClass;
-    }, 2500);
-  }
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 255, 136, 0.1);
+  color: var(--primary-color);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  border: 1px solid rgba(0, 255, 136, 0.3);
+}
 
-  function startCountdown(seconds) {
-    if (countdownTimer) clearInterval(countdownTimer);
+.dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--primary-color);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--primary-color);
+}
 
-    countdownEl.classList.remove('hidden');
+.instruction {
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  margin-bottom: 25px;
+  line-height: 1.4;
+}
 
-    function updateTimer() {
-      if (seconds <= 0) {
-        clearInterval(countdownTimer);
-        countdownEl.classList.add('hidden');
-        statusMessage.textContent = 'READY TO CLAIM NEW KEY';
-        statusMessage.className = '';
-        getKeyBtn.disabled = false;
-        return;
-      }
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  border: none;
+  border-radius: 8px;
+  color: #000;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 
-      const hrs = Math.floor(seconds / 3600).toString().padStart(2, '0');
-      const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-      const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 255, 136, 0.4);
+}
 
-      countdownEl.textContent = `${hrs}:${mins}:${secs}`;
-      seconds--;
-    }
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
 
-    updateTimer();
-    countdownTimer = setInterval(updateTimer, 1000);
-  }
+.result-box {
+  margin-top: 25px;
+  text-align: left;
+  animation: fadeIn 0.4s ease;
+}
 
-  function setLoading(isLoading) {
-    if (isLoading) {
-      getKeyBtn.disabled = true;
-      btnText.classList.add('hidden');
-      spinner.classList.remove('hidden');
-    } else {
-      getKeyBtn.disabled = false;
-      btnText.classList.remove('hidden');
-      spinner.classList.add('hidden');
-    }
-  }
-});
+.result-box label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.key-display-wrapper {
+  display: flex;
+  gap: 8px;
+}
+
+.key-display-wrapper input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  border-radius: 6px;
+  color: var(--primary-color);
+  font-family: 'Roboto Mono', monospace;
+  font-weight: 600;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.btn-copy {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
+  color: #fff;
+  padding: 0 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-copy:hover {
+  background: rgba(0, 255, 136, 0.2);
+  color: var(--primary-color);
+}
+
+.timer-info {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 8px;
+  text-align: right;
+}
+
+.toast {
+  margin-top: 15px;
+  padding: 10px;
+  background: rgba(0, 255, 136, 0.15);
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.footer {
+  margin-top: 30px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 15px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(0,0,0,0.2);
+  border-top: 3px solid #000;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}});
