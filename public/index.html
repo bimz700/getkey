@@ -17,29 +17,38 @@
         <p class="subtitle">VIP ACCESS KEY GENERATOR</p>
       </div>
 
-      <div class="status-badge">
-        <span class="dot"></span> Server Online
+      <div class="status-badge" id="statusBadge">
+        <span class="dot"></span> <span id="statusText">System Ready</span>
       </div>
 
-      <div class="instruction">
+      <div class="instruction" id="instructionText">
         Klik tombol di bawah ini untuk mendapatkan lisensi key Anda. Key berlaku selama 24 jam.
       </div>
 
+      <!-- Button GET KEY -->
       <button id="getKeyBtn" class="btn-primary">
-        <span class="btn-text">DAPATKAN KEY</span>
+        <span class="btn-text">GET KEY</span>
         <span class="spinner hidden"></span>
       </button>
 
-      <div id="resultBox" class="result-box hidden">
-        <label>KEY ANDA:</label>
-        <div class="key-display-wrapper">
-          <input type="text" id="keyInput" readonly value="">
-          <button id="copyBtn" class="btn-copy">Copy</button>
-        </div>
-        <div class="timer-info">Masa berlaku: <span id="expiryText">24 Jam</span></div>
+      <!-- Status Message & Countdown Display -->
+      <div id="statusMessage" class="status-msg hidden"></div>
+      
+      <div id="countdownBox" class="countdown-box hidden">
+        <label>COOLDOWN REMAINING:</label>
+        <div id="countdownTimer" class="timer-display">24:00:00</div>
       </div>
 
-      <div id="toast" class="toast hidden">Key berhasil disalin ke clipboard!</div>
+      <!-- Result Key Display -->
+      <div id="resultBox" class="result-box hidden">
+        <label>YOUR VIP KEY:</label>
+        <div class="key-display-wrapper">
+          <input type="text" id="keyInput" readonly value="">
+          <button id="copyBtn" class="btn-copy">COPY</button>
+        </div>
+      </div>
+
+      <div id="toast" class="toast hidden"></div>
 
       <div class="footer">
         &copy; 2026 MZMODZ Official. All rights reserved.
