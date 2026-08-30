@@ -1,6 +1,8 @@
 :root {
   --primary-color: #00ff88;
   --secondary-color: #00b8ff;
+  --error-color: #ff4757;
+  --warning-color: #ffa500;
   --bg-color: #0d0f12;
   --card-bg: rgba(18, 22, 29, 0.85);
   --text-color: #ffffff;
@@ -22,7 +24,6 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow-x: hidden;
   padding: 20px;
 }
 
@@ -118,19 +119,64 @@ body {
   align-items: center;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(0, 255, 136, 0.4);
 }
 
 .btn-primary:disabled {
-  opacity: 0.6;
+  background: #2a323d;
+  color: #5a6578;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
+  border: 1px solid #3a4659;
+}
+
+.status-msg {
+  margin-top: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 0.95rem;
+}
+
+.status-msg.success {
+  color: var(--primary-color);
+}
+
+.status-msg.cooldown {
+  color: var(--warning-color);
+}
+
+.status-msg.error {
+  color: var(--error-color);
+}
+
+.countdown-box {
+  margin-top: 20px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px dashed var(--warning-color);
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.countdown-box label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  display: block;
+  margin-bottom: 5px;
+  letter-spacing: 1px;
+}
+
+.timer-display {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--warning-color);
 }
 
 .result-box {
-  margin-top: 25px;
+  margin-top: 20px;
   text-align: left;
   animation: fadeIn 0.4s ease;
 }
@@ -150,38 +196,32 @@ body {
 
 .key-display-wrapper input {
   flex: 1;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   border: 1px solid var(--border-color);
   padding: 12px;
   border-radius: 6px;
   color: var(--primary-color);
   font-family: 'Roboto Mono', monospace;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 1rem;
   outline: none;
+  text-align: center;
 }
 
 .btn-copy {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 255, 136, 0.15);
   border: 1px solid var(--border-color);
-  color: #fff;
+  color: var(--primary-color);
   padding: 0 16px;
   border-radius: 6px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .btn-copy:hover {
-  background: rgba(0, 255, 136, 0.2);
-  color: var(--primary-color);
-}
-
-.timer-info {
-  font-size: 0.8rem;
-  color: var(--text-dim);
-  margin-top: 8px;
-  text-align: right;
+  background: var(--primary-color);
+  color: #000;
 }
 
 .toast {
@@ -210,8 +250,8 @@ body {
 .spinner {
   width: 20px;
   height: 20px;
-  border: 3px solid rgba(0,0,0,0.2);
-  border-top: 3px solid #000;
+  border: 3px solid rgba(255,255,255,0.2);
+  border-top: 3px solid #fff;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -224,4 +264,4 @@ body {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
-}});
+}
