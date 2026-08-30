@@ -1,49 +1,51 @@
-l<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MZMODZ - GET KEY</title>
+  <title>GET KEY MZMODZ</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Roboto+Mono:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="glow-bg"></div>
-
-  <main class="container">
-    <header class="header">
-      <h1 class="brand-title">MZMODZ</h1>
-      <p class="brand-subtitle">KEY ACCESS</p>
-    </header>
-
-    <section class="card">
-      <div class="key-box">
-        <span id="keyDisplay" class="key-text">••••••••••••••</span>
+  <div class="background-overlay"></div>
+  
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <h1 class="brand-title">MZMODZ</h1>
+        <p class="subtitle">VIP ACCESS KEY GENERATOR</p>
       </div>
 
-      <div class="status-box" id="statusBox">
-        <span id="statusMessage">PRESS GET KEY TO CLAIM</span>
-        <div id="countdown" class="countdown hidden">24:00:00</div>
+      <div class="status-badge">
+        <span class="dot"></span> Server Online
       </div>
 
-      <div class="button-group">
-        <button id="getKeyBtn" class="btn btn-primary">
-          <span class="btn-text">GET KEY</span>
-          <div class="spinner hidden" id="spinner"></div>
-        </button>
-
-        <button id="copyKeyBtn" class="btn btn-secondary" disabled>
-          <span class="btn-text">COPY KEY</span>
-        </button>
+      <div class="instruction">
+        Klik tombol di bawah ini untuk mendapatkan lisensi key Anda. Key berlaku selama 24 jam.
       </div>
-    </section>
 
-    <footer class="footer">
-      <p>&copy; MZMODZ Access Portal • 1 Key / 24 Hours</p>
-    </footer>
-  </main>
+      <button id="getKeyBtn" class="btn-primary">
+        <span class="btn-text">DAPATKAN KEY</span>
+        <span class="spinner hidden"></span>
+      </button>
+
+      <div id="resultBox" class="result-box hidden">
+        <label>KEY ANDA:</label>
+        <div class="key-display-wrapper">
+          <input type="text" id="keyInput" readonly value="">
+          <button id="copyBtn" class="btn-copy">Copy</button>
+        </div>
+        <div class="timer-info">Masa berlaku: <span id="expiryText">24 Jam</span></div>
+      </div>
+
+      <div id="toast" class="toast hidden">Key berhasil disalin ke clipboard!</div>
+
+      <div class="footer">
+        &copy; 2026 MZMODZ Official. All rights reserved.
+      </div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>
