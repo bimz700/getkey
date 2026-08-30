@@ -1,7 +1,23 @@
 {
   "version": 2,
-  "cleanUrls": true,
-  "rewrites": [
-    { "source": "/api/getkey", "destination": "/api/getkey.js" }
+  "builds": [
+    {
+      "src": "api/getkey.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "public/**/*",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/getkey",
+      "dest": "/api/getkey.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/$1"
+    }
   ]
 }
