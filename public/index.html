@@ -1,0 +1,52 @@
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MZMODZ - GET KEY</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="glow-bg"></div>
+
+  <main class="container">
+    <header class="header">
+      <h1 class="brand-title">MZMODZ</h1>
+      <p class="brand-subtitle">KEY ACCESS</p>
+    </header>
+
+    <section class="card">
+      <div class="key-box">
+        <span id="keyDisplay" class="key-text">••••••••••••••</span>
+      </div>
+
+      <div class="status-box" id="statusBox">
+        <span id="statusMessage">PRESS GET KEY TO CLAIM</span>
+        <div id="countdown" class="countdown hidden">24:00:00</div>
+      </div>
+
+      <div class="button-group">
+        <button id="getKeyBtn" class="btn btn-primary">
+          <span class="btn-text">GET KEY</span>
+          <div class="spinner hidden" id="spinner"></div>
+        </button>
+
+        <button id="copyKeyBtn" class="btn btn-secondary" disabled>
+          <span class="btn-text">COPY KEY</span>
+        </button>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>&copy; MZMODZ Access Portal • 1 Key / 24 Hours</p>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
+```

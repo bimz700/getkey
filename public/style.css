@@ -1,0 +1,117 @@
+document.addEventListener('DOMContentLoaded', () => {
+  const getKeyBtn = document.getElementById('getKeyBtn');
+  const copyKeyBtn = document.getElementById('copyKeyBtn');
+  const keyDisplay = document.getElementById('keyDisplay');
+  const statusMessage = document.getElementById('statusMessage');
+  const countdownEl = document.getElementById('countdown');
+  const spinner = document.getElementById('spinner');
+  const btnText = getKeyBtn.querySelector('.btn-text');
+
+  let currentKey = '';
+  let countdownTimer = null;
+
+  // Event handler tombol GET KEY
+  getKeyBtn.addEventListener('click', async () => {
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/getkey');
+      const data = await response.json();
+
+      if (data.success) {
+        currentKey = data.key;
+        keyDisplay.textContent = currentKey;
+        statusMessage.textContent = 'KEY GENERATED SUCCESSFULLY';
+        statusMessage.className = 'status-success';
+        copyKeyBtn.disabled = false;
+      } else if (data.cooldown) {
+        statusMessage.textContent = '24 HOUR COOLDOWN';
+        statusMessage.className = 'status-cooldown';
+        startCountdown(data.remaining);
+        getKeyBtn.disabled = true;
+      } else if (data.message === 'ALL KEYS ARE USED') {
+        statusMessage.textContent = 'ALL KEYS ARE USED';
+        statusMessage.className = 'status-warning';
+        getKeyBtn.disabled = true;
+      } else {
+        statusMessage.textContent = data.message || 'FAILED TO GET KEY';
+        statusMessage.className = 'status-warning';
+      }
+    } catch (error) {
+      statusMessage.textContent = 'NETWORK / SERVER ERROR';
+      statusMessage.className = 'status-warning';
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  // Event handler tombol COPY KEY
+  copyKeyBtn.addEventListener('click', () => {
+    if (!currentKey) return;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(currentKey).then(showCopiedStatus);
+    } else {
+      // Fallback untuk browser lama / iFrame
+      const input = document.createElement('input');
+      input.value = currentKey;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      showCopiedStatus();
+    }
+  });
+
+  function showCopiedStatus() {
+    const originalText = statusMessage.textContent;
+    const originalClass = statusMessage.className;
+
+    statusMessage.textContent = 'KEY COPIED TO CLIPBOARD';
+    statusMessage.className = 'status-success';
+
+    setTimeout(() => {
+      statusMessage.textContent = originalText;
+      statusMessage.className = originalClass;
+    }, 2500);
+  }
+
+  function startCountdown(seconds) {
+    if (countdownTimer) clearInterval(countdownTimer);
+
+    countdownEl.classList.remove('hidden');
+
+    function updateTimer() {
+      if (seconds <= 0) {
+        clearInterval(countdownTimer);
+        countdownEl.classList.add('hidden');
+        statusMessage.textContent = 'READY TO CLAIM NEW KEY';
+        statusMessage.className = '';
+        getKeyBtn.disabled = false;
+        return;
+      }
+
+      const hrs = Math.floor(seconds / 3600).toString().padStart(2, '0');
+      const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+      const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+
+      countdownEl.textContent = `${hrs}:${mins}:${secs}`;
+      seconds--;
+    }
+
+    updateTimer();
+    countdownTimer = setInterval(updateTimer, 1000);
+  }
+
+  function setLoading(isLoading) {
+    if (isLoading) {
+      getKeyBtn.disabled = true;
+      btnText.classList.add('hidden');
+      spinner.classList.remove('hidden');
+    } else {
+      getKeyBtn.disabled = false;
+      btnText.classList.remove('hidden');
+      spinner.classList.add('hidden');
+    }
+  }
+});
