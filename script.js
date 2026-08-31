@@ -1,214 +1,948 @@
+// ==================================================
+// KONFIGURASI SHORTLINK
+// ==================================================
+
 const SHORTLINK_URL = "https://sfl.gl/cSXqDyqz";
+
+// true = redirect ke ShortLink HANYA ketika halaman
+// di-refresh dalam kondisi device masih cooldown.
 const ENABLE_SHORTLINK = true;
+
 const SHORTLINK_DELAY = 500;
+
 const API_URL = "/api/getkey";
-const STORAGE_KEY = "mzmodz_device_id";
+const DEVICE_STORAGE_KEY = "mzmodz_device_id";
+
+// ==================================================
+// ELEMENT DOM
+// Kompatibel dengan beberapa nama ID
+// ==================================================
 
 const getKeyBtn = document.getElementById("getKeyBtn");
 const copyKeyBtn = document.getElementById("copyKeyBtn");
 const keyDisplay = document.getElementById("keyDisplay");
-const statusText = document.getElementById("statusText");
-const statusDot = document.getElementById("statusDot");
-const countdownEl = document.getElementById("countdown");
-const toastEl = document.getElementById("toast");
-const btnText = getKeyBtn?.querySelector(".btn-text");
-const btnLoader = getKeyBtn?.querySelector(".btn-loader");
+
+const statusText =
+    document.getElementById("statusText") ||
+    document.getElementById("statusMessage");
+
+const statusDot =
+    document.getElementById("statusDot");
+
+const countdownEl =
+    document.getElementById("countdown");
+
+const toastEl =
+    document.getElementById("toast");
+
+const btnText =
+    getKeyBtn
+        ? getKeyBtn.querySelector(".btn-text")
+        : null;
+
+const btnLoader =
+    getKeyBtn
+        ? (
+            getKeyBtn.querySelector(".btn-loader") ||
+            getKeyBtn.querySelector(".spinner")
+        )
+        : null;
+
+
+// ==================================================
+// VARIABLE
+// ==================================================
 
 let countdownInterval = null;
 let currentKey = null;
+
 let isRequesting = false;
-let claimedThisSession = false;
+
+// Menandakan GET KEY berhasil dilakukan pada sesi
+// halaman yang sedang aktif.
+let hasSuccessfullyClaimed = false;
+
+
+// ==================================================
+// DEVICE ID
+// ==================================================
 
 function getDeviceId() {
-  let id = localStorage.getItem(STORAGE_KEY);
-  if (!id) {
-    id = "mz_" + crypto.randomUUID();
-    localStorage.setItem(STORAGE_KEY, id);
-  }
-  return id;
+
+    let deviceId =
+        localStorage.getItem(
+            DEVICE_STORAGE_KEY
+        );
+
+    if (!deviceId) {
+
+        if (
+            window.crypto &&
+            crypto.randomUUID
+        ) {
+
+            deviceId =
+                "mz_" +
+                crypto.randomUUID();
+
+        } else {
+
+            deviceId =
+                "mz_" +
+                Math.random()
+                    .toString(36)
+                    .substring(2) +
+                Date.now();
+
+        }
+
+        localStorage.setItem(
+            DEVICE_STORAGE_KEY,
+            deviceId
+        );
+    }
+
+    return deviceId;
 }
 
-function showToast(message, duration = 3000) {
-  if (!toastEl) return;
-  toastEl.textContent = message;
-  toastEl.classList.remove("hidden");
-  setTimeout(() => toastEl.classList.add("hidden"), duration);
+
+// ==================================================
+// DETEKSI REFRESH
+// ==================================================
+
+function isPageRefresh() {
+
+    try {
+
+        const navigation =
+            performance.getEntriesByType(
+                "navigation"
+            )[0];
+
+        if (navigation) {
+
+            return (
+                navigation.type === "reload"
+            );
+        }
+
+    } catch (error) {
+
+        console.warn(
+            "Navigation detection failed:",
+            error
+        );
+    }
+
+    return false;
 }
+
+
+// ==================================================
+// TOAST
+// ==================================================
+
+function showToast(
+    message,
+    duration = 3000
+) {
+
+    if (!toastEl) {
+        return;
+    }
+
+    toastEl.textContent = message;
+
+    toastEl.classList.remove(
+        "hidden"
+    );
+
+    setTimeout(() => {
+
+        toastEl.classList.add(
+            "hidden"
+        );
+
+    }, duration);
+}
+
+
+// ==================================================
+// FORMAT COUNTDOWN
+// ==================================================
 
 function formatTime(seconds) {
-  seconds = Math.max(0, Number(seconds) || 0);
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  return [h, m, s].map(n => String(n).padStart(2, "0")).join(":");
+
+    seconds =
+        Math.max(
+            0,
+            Number(seconds) || 0
+        );
+
+    const hours =
+        Math.floor(
+            seconds / 3600
+        );
+
+    const minutes =
+        Math.floor(
+            (seconds % 3600) / 60
+        );
+
+    const secs =
+        Math.floor(
+            seconds % 60
+        );
+
+    const pad = (number) =>
+        String(number).padStart(
+            2,
+            "0"
+        );
+
+    return (
+        `${pad(hours)}:` +
+        `${pad(minutes)}:` +
+        `${pad(secs)}`
+    );
 }
 
-function setStatus(text, type = "ready") {
-  if (statusText) statusText.textContent = text;
-  if (statusDot) {
-    statusDot.className = "status-dot";
-    if (type === "cooldown") statusDot.classList.add("cooldown");
-    if (type === "error") statusDot.classList.add("error");
-  }
+
+// ==================================================
+// STATUS
+// ==================================================
+
+function setStatus(
+    message,
+    type = "ready"
+) {
+
+    if (statusText) {
+
+        statusText.textContent =
+            message;
+    }
+
+    if (statusDot) {
+
+        statusDot.className =
+            "status-dot";
+
+        if (type === "cooldown") {
+
+            statusDot.classList.add(
+                "cooldown"
+            );
+        }
+
+        if (type === "error") {
+
+            statusDot.classList.add(
+                "error"
+            );
+        }
+    }
 }
 
-function setLoading(loading) {
-  if (!getKeyBtn) return;
-  if (loading) {
-    getKeyBtn.disabled = true;
-    btnText?.classList.add("hidden");
-    btnLoader?.classList.remove("hidden");
-  } else {
-    btnText?.classList.remove("hidden");
-    btnLoader?.classList.add("hidden");
-  }
+
+// ==================================================
+// LOADING
+// ==================================================
+
+function setLoading(
+    loading
+) {
+
+    if (!getKeyBtn) {
+        return;
+    }
+
+    if (loading) {
+
+        getKeyBtn.disabled = true;
+
+        if (btnText) {
+
+            btnText.classList.add(
+                "hidden"
+            );
+        }
+
+        if (btnLoader) {
+
+            btnLoader.classList.remove(
+                "hidden"
+            );
+        }
+
+    } else {
+
+        if (btnText) {
+
+            btnText.classList.remove(
+                "hidden"
+            );
+        }
+
+        if (btnLoader) {
+
+            btnLoader.classList.add(
+                "hidden"
+            );
+        }
+
+        /*
+         * Jangan mengubah disabled di sini.
+         *
+         * Setelah GET KEY sukses, tombol harus
+         * tetap disabled.
+         */
+    }
 }
+
+
+// ==================================================
+// START COUNTDOWN
+// ==================================================
+
+function startCountdown(
+    durationSeconds
+) {
+
+    if (countdownInterval) {
+
+        clearInterval(
+            countdownInterval
+        );
+
+        countdownInterval = null;
+    }
+
+    let remaining =
+        Math.max(
+            0,
+            Number(durationSeconds) || 0
+        );
+
+    if (countdownEl) {
+
+        countdownEl.classList.remove(
+            "hidden"
+        );
+
+        countdownEl.textContent =
+            formatTime(
+                remaining
+            );
+    }
+
+    if (remaining <= 0) {
+
+        checkStatusOnLoad();
+
+        return;
+    }
+
+    countdownInterval =
+        setInterval(() => {
+
+            remaining--;
+
+            if (countdownEl) {
+
+                countdownEl.textContent =
+                    formatTime(
+                        remaining
+                    );
+            }
+
+            if (remaining <= 0) {
+
+                clearInterval(
+                    countdownInterval
+                );
+
+                countdownInterval = null;
+
+                if (countdownEl) {
+
+                    countdownEl.textContent =
+                        "00:00:00";
+                }
+
+                /*
+                 * Jangan langsung enable tombol.
+                 * Pastikan server/Redis memang sudah
+                 * menghapus cooldown.
+                 */
+                checkStatusOnLoad();
+
+            }
+
+        }, 1000);
+}
+
+
+// ==================================================
+// STOP COUNTDOWN
+// ==================================================
 
 function stopCountdown() {
-  if (countdownInterval) clearInterval(countdownInterval);
-  countdownInterval = null;
-}
 
-function startCountdown(seconds) {
-  stopCountdown();
-  let remaining = Number(seconds) || 0;
-  countdownEl?.classList.remove("hidden");
-  if (countdownEl) countdownEl.textContent = formatTime(remaining);
+    if (countdownInterval) {
 
-  countdownInterval = setInterval(async () => {
-    remaining--;
-    if (countdownEl) countdownEl.textContent = formatTime(remaining);
-    if (remaining <= 0) {
-      stopCountdown();
-      await checkStatusOnLoad(false);
+        clearInterval(
+            countdownInterval
+        );
+
+        countdownInterval = null;
     }
-  }, 1000);
+
+    if (countdownEl) {
+
+        countdownEl.classList.add(
+            "hidden"
+        );
+    }
 }
+
+
+// ==================================================
+// REDIRECT SHORTLINK
+// ==================================================
 
 function redirectToShortlink() {
-  if (!ENABLE_SHORTLINK) return;
-  setTimeout(() => {
-    window.location.replace(SHORTLINK_URL);
-  }, SHORTLINK_DELAY);
+
+    if (!ENABLE_SHORTLINK) {
+        return;
+    }
+
+    setTimeout(() => {
+
+        window.location.replace(
+            SHORTLINK_URL
+        );
+
+    }, SHORTLINK_DELAY);
 }
 
-async function checkStatusOnLoad(redirectIfCooldown = true) {
-  try {
-    const response = await fetch(`${API_URL}?action=check`, {
-      headers: { "X-Device-Identifier": getDeviceId() },
-      cache: "no-store"
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
 
-    if (data.cooldown) {
-      currentKey = data.key || null;
-      if (currentKey) keyDisplay.textContent = currentKey;
-      copyKeyBtn.disabled = !currentKey;
-      getKeyBtn.disabled = true;
-      setStatus("24 HOUR COOLDOWN", "cooldown");
-      startCountdown(data.remaining);
+// ==================================================
+// CHECK STATUS SERVER
+// ==================================================
 
-      // Hanya redirect ketika halaman dibuka kembali/di-refresh.
-      if (redirectIfCooldown) redirectToShortlink();
-      return;
+async function checkStatusOnLoad() {
+
+    const deviceId =
+        getDeviceId();
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}?action=check`,
+                {
+                    method: "GET",
+
+                    headers: {
+                        "X-Device-Identifier":
+                            deviceId
+                    },
+
+                    cache: "no-store"
+                }
+            );
+
+        if (!response.ok) {
+
+            throw new Error(
+                `HTTP ${response.status}`
+            );
+        }
+
+        const data =
+            await response.json();
+
+
+        // ==================================================
+        // MASIH COOLDOWN
+        // ==================================================
+
+        if (
+            data.cooldown === true
+        ) {
+
+            currentKey =
+                data.key || null;
+
+            if (
+                currentKey &&
+                keyDisplay
+            ) {
+
+                keyDisplay.textContent =
+                    currentKey;
+            }
+
+            if (
+                copyKeyBtn &&
+                currentKey
+            ) {
+
+                copyKeyBtn.disabled =
+                    false;
+            }
+
+            setStatus(
+                "24 HOUR COOLDOWN",
+                "cooldown"
+            );
+
+            startCountdown(
+                data.remaining || 0
+            );
+
+            if (getKeyBtn) {
+
+                getKeyBtn.disabled =
+                    true;
+            }
+
+
+            // ==================================================
+            // INI BAGIAN PENTING
+            //
+            // Kalau buka website biasa:
+            // TIDAK redirect.
+            //
+            // Kalau refresh:
+            // redirect ke ShortLink.
+            // ==================================================
+
+            if (
+                ENABLE_SHORTLINK &&
+                isPageRefresh()
+            ) {
+
+                redirectToShortlink();
+            }
+
+            return;
+        }
+
+
+        // ==================================================
+        // TIDAK ADA COOLDOWN
+        // ==================================================
+
+        stopCountdown();
+
+        if (
+            !hasSuccessfullyClaimed
+        ) {
+
+            currentKey = null;
+
+            if (keyDisplay) {
+
+                keyDisplay.textContent =
+                    "••••••••••••••";
+            }
+
+            if (copyKeyBtn) {
+
+                copyKeyBtn.disabled =
+                    true;
+            }
+        }
+
+        setStatus(
+            "SYSTEM READY",
+            "ready"
+        );
+
+        if (
+            getKeyBtn &&
+            !isRequesting &&
+            !hasSuccessfullyClaimed
+        ) {
+
+            getKeyBtn.disabled =
+                false;
+        }
+
+
+    } catch (error) {
+
+        console.error(
+            "Status check error:",
+            error
+        );
+
+        setStatus(
+            "SERVER ERROR",
+            "error"
+        );
     }
-
-    stopCountdown();
-    if (!claimedThisSession) {
-      currentKey = null;
-      keyDisplay.textContent = "••••••••••••••";
-      copyKeyBtn.disabled = true;
-    }
-    getKeyBtn.disabled = false;
-    setStatus("SYSTEM READY", "ready");
-  } catch (error) {
-    console.error("Status check error:", error);
-    setStatus("SERVER ERROR", "error");
-  }
 }
 
-async function requestKey() {
-  if (isRequesting || claimedThisSession) return;
-  isRequesting = true;
-  getKeyBtn.disabled = true;
-  setLoading(true);
-  setStatus("FETCHING KEY...", "ready");
 
-  try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Device-Identifier": getDeviceId()
-      },
-      cache: "no-store"
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
+// ==================================================
+// GET KEY
+// ==================================================
 
-    if (data.success) {
-      currentKey = data.key;
-      claimedThisSession = true;
-      keyDisplay.textContent = currentKey;
-      copyKeyBtn.disabled = false;
-      getKeyBtn.disabled = true;
-      setStatus("KEY CLAIMED", "ready");
-      startCountdown(data.remaining || 86400);
-      showToast("KEY SUCCESSFULLY GENERATED!");
-      return;
-    }
+if (getKeyBtn) {
 
-    if (data.cooldown) {
-      currentKey = data.key || null;
-      if (currentKey) keyDisplay.textContent = currentKey;
-      copyKeyBtn.disabled = !currentKey;
-      getKeyBtn.disabled = true;
-      setStatus("24 HOUR COOLDOWN", "cooldown");
-      startCountdown(data.remaining || 0);
-      showToast("DEVICE ALREADY CLAIMED A KEY");
-      return;
-    }
+    getKeyBtn.addEventListener(
+        "click",
+        async () => {
 
-    if (data.message === "ALL KEYS ARE USED") {
-      keyDisplay.textContent = "OUT OF KEYS";
-      copyKeyBtn.disabled = true;
-      getKeyBtn.disabled = true;
-      setStatus("ALL KEYS ARE USED", "error");
-      showToast("ALL KEYS ARE USED");
-      return;
-    }
+            // ==================================================
+            // ANTI DOUBLE CLICK
+            // ==================================================
 
-    setStatus(data.message || "SERVER ERROR", "error");
-    getKeyBtn.disabled = false;
-  } catch (error) {
-    console.error("GET KEY error:", error);
-    setStatus("SERVER ERROR", "error");
-    showToast("FAILED TO CONNECT TO SERVER");
-    getKeyBtn.disabled = false;
-  } finally {
-    isRequesting = false;
-    setLoading(false);
-    if (claimedThisSession) getKeyBtn.disabled = true;
-  }
+            if (isRequesting) {
+                return;
+            }
+
+            if (
+                hasSuccessfullyClaimed
+            ) {
+                return;
+            }
+
+            isRequesting = true;
+
+            getKeyBtn.disabled =
+                true;
+
+            setLoading(true);
+
+            setStatus(
+                "GENERATING KEY...",
+                "ready"
+            );
+
+
+            try {
+
+                const deviceId =
+                    getDeviceId();
+
+
+                const response =
+                    await fetch(
+                        API_URL,
+                        {
+                            method: "GET",
+
+                            headers: {
+                                "X-Device-Identifier":
+                                    deviceId
+                            },
+
+                            cache: "no-store"
+                        }
+                    );
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        `HTTP ${response.status}`
+                    );
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                // ==================================================
+                // SUCCESS
+                // ==================================================
+
+                if (
+                    data.success === true
+                ) {
+
+                    currentKey =
+                        data.key;
+
+                    hasSuccessfullyClaimed =
+                        true;
+
+
+                    if (keyDisplay) {
+
+                        keyDisplay.textContent =
+                            currentKey;
+                    }
+
+
+                    if (copyKeyBtn) {
+
+                        copyKeyBtn.disabled =
+                            false;
+                    }
+
+
+                    setStatus(
+                        "KEY GENERATED SUCCESSFULLY",
+                        "ready"
+                    );
+
+
+                    startCountdown(
+                        data.remaining ||
+                        86400
+                    );
+
+
+                    /*
+                     * WAJIB DISABLED.
+                     *
+                     * User tidak bisa klik GET KEY
+                     * lagi pada sesi ini.
+                     */
+                    getKeyBtn.disabled =
+                        true;
+
+
+                    showToast(
+                        "KEY SUCCESSFULLY CLAIMED"
+                    );
+
+
+                    return;
+                }
+
+
+                // ==================================================
+                // COOLDOWN
+                // ==================================================
+
+                if (
+                    data.cooldown === true
+                ) {
+
+                    currentKey =
+                        data.key || null;
+
+
+                    if (
+                        currentKey &&
+                        keyDisplay
+                    ) {
+
+                        keyDisplay.textContent =
+                            currentKey;
+                    }
+
+
+                    if (
+                        copyKeyBtn &&
+                        currentKey
+                    ) {
+
+                        copyKeyBtn.disabled =
+                            false;
+                    }
+
+
+                    setStatus(
+                        "24 HOUR COOLDOWN",
+                        "cooldown"
+                    );
+
+
+                    startCountdown(
+                        data.remaining || 0
+                    );
+
+
+                    getKeyBtn.disabled =
+                        true;
+
+
+                    return;
+                }
+
+
+                // ==================================================
+                // ALL KEYS USED
+                // ==================================================
+
+                if (
+                    data.message ===
+                    "ALL KEYS ARE USED"
+                ) {
+
+                    setStatus(
+                        "ALL KEYS ARE USED",
+                        "error"
+                    );
+
+
+                    getKeyBtn.disabled =
+                        true;
+
+
+                    showToast(
+                        "ALL KEYS ARE USED"
+                    );
+
+
+                    return;
+                }
+
+
+                // ==================================================
+                // SERVER MESSAGE
+                // ==================================================
+
+                setStatus(
+                    data.message ||
+                    "FAILED TO GET KEY",
+                    "error"
+                );
+
+
+                getKeyBtn.disabled =
+                    false;
+
+
+            } catch (error) {
+
+                console.error(
+                    "GET KEY ERROR:",
+                    error
+                );
+
+
+                setStatus(
+                    "NETWORK / SERVER ERROR",
+                    "error"
+                );
+
+
+                showToast(
+                    "SERVER ERROR"
+                );
+
+
+                /*
+                 * Request gagal.
+                 * Belum berhasil claim.
+                 * Jadi masih boleh mencoba lagi.
+                 */
+                getKeyBtn.disabled =
+                    false;
+
+
+            } finally {
+
+                isRequesting =
+                    false;
+
+                setLoading(false);
+
+            }
+
+        }
+    );
 }
 
-async function copyKeyToClipboard() {
-  if (!currentKey) return;
-  try {
-    await navigator.clipboard.writeText(currentKey);
-    showToast("KEY COPIED TO CLIPBOARD!");
-  } catch {
-    const input = document.createElement("textarea");
-    input.value = currentKey;
-    document.body.appendChild(input);
-    input.select();
-    document.execCommand("copy");
-    input.remove();
-    showToast("KEY COPIED TO CLIPBOARD!");
-  }
+
+// ==================================================
+// COPY KEY
+// ==================================================
+
+if (copyKeyBtn) {
+
+    copyKeyBtn.addEventListener(
+        "click",
+        async () => {
+
+            if (!currentKey) {
+                return;
+            }
+
+
+            try {
+
+                if (
+                    navigator.clipboard &&
+                    navigator.clipboard.writeText
+                ) {
+
+                    await navigator.clipboard
+                        .writeText(
+                            currentKey
+                        );
+
+                } else {
+
+                    const textarea =
+                        document.createElement(
+                            "textarea"
+                        );
+
+                    textarea.value =
+                        currentKey;
+
+                    textarea.style.position =
+                        "fixed";
+
+                    textarea.style.opacity =
+                        "0";
+
+                    document.body.appendChild(
+                        textarea
+                    );
+
+                    textarea.focus();
+                    textarea.select();
+
+                    document.execCommand(
+                        "copy"
+                    );
+
+                    textarea.remove();
+                }
+
+
+                showToast(
+                    "KEY COPIED TO CLIPBOARD"
+                );
+
+
+            } catch (error) {
+
+                console.error(
+                    "COPY ERROR:",
+                    error
+                );
+
+                showToast(
+                    "FAILED TO COPY KEY"
+                );
+            }
+
+        }
+    );
 }
 
-getKeyBtn.addEventListener("click", requestKey);
-copyKeyBtn.addEventListener("click", copyKeyToClipboard);
-window.addEventListener("DOMContentLoaded", () => checkStatusOnLoad(true));
+
+// ==================================================
+// INITIAL LOAD
+// ==================================================
+
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+
+        checkStatusOnLoad();
+
+    }
+);
