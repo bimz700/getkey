@@ -1,7 +1,7 @@
 // ==================================================
 // KONFIGURASI SHORTLINK
 // ==================================================
-const SHORTLINK_URL = "ISI_SHORTLINK_DI_SINI";
+const SHORTLINK_URL = "https://sfl.gl/cSXqDyqz";
 const ENABLE_SHORTLINK = false;
 const SHORTLINK_DELAY = 3000;
 
