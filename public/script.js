@@ -1,189 +1,243 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const getKeyBtn = document.getElementById('getKeyBtn');
-  const btnText = getKeyBtn.querySelector('.btn-text');
-  const spinner = getKeyBtn.querySelector('.spinner');
-  const statusMessage = document.getElementById('statusMessage');
-  const countdownBox = document.getElementById('countdownBox');
-  const countdownTimer = document.getElementById('countdownTimer');
-  const resultBox = document.getElementById('resultBox');
-  const keyInput = document.getElementById('keyInput');
-  const copyBtn = document.getElementById('copyBtn');
-  const toast = document.getElementById('toast');
-  const statusText = document.getElementById('statusText');
+// ==================================================
+// KONFIGURASI SHORTLINK
+// ==================================================
+const SHORTLINK_URL = "ISI_SHORTLINK_DI_SINI";
+const ENABLE_SHORTLINK = false;
+const SHORTLINK_DELAY = 3000;
 
-  let countdownInterval = null;
+// ==================================================
+// ELEMEN DOM
+// ==================================================
+const getKeyBtn = document.getElementById('getKeyBtn');
+const copyKeyBtn = document.getElementById('copyKeyBtn');
+const keyDisplay = document.getElementById('keyDisplay');
+const statusText = document.getElementById('statusText');
+const statusDot = document.getElementById('statusDot');
+const countdownEl = document.getElementById('countdown');
+const toastEl = document.getElementById('toast');
+const btnText = getKeyBtn.querySelector('.btn-text');
+const btnLoader = getKeyBtn.querySelector('.btn-loader');
 
-  // 1. Dapatkan atau Buat Unique Device Identifier di Client
-  function getDeviceId() {
-    let deviceId = localStorage.getItem('mz_device_id');
+let countdownInterval = null;
+let currentKey = null;
+
+// ==================================================
+// UTILS: DEVICE IDENTIFIER (localStorage)
+// ==================================================
+function getDeviceId() {
+    const STORAGE_KEY = 'mzmodz_device_id';
+    let deviceId = localStorage.getItem(STORAGE_KEY);
+    
     if (!deviceId) {
-      deviceId = 'dev_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-      localStorage.setItem('mz_device_id', deviceId);
+        // Buat ID unik secara otomatis jika belum ada
+        deviceId = 'mz_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem(STORAGE_KEY, deviceId);
     }
     return deviceId;
-  }
+}
 
-  // Helper untuk melakukan Fetch Request dengan Identifier
-  async function fetchApi(url, options = {}) {
-    const headers = {
-      ...options.headers,
-      'X-Device-Identifier': getDeviceId()
-    };
-    return fetch(url, { ...options, headers });
-  }
+// ==================================================
+// UTILS: TOAST NOTIFICATION
+// ==================================================
+function showToast(message, duration = 3000) {
+    toastEl.textContent = message;
+    toastEl.classList.remove('hidden');
+    setTimeout(() => {
+        toastEl.classList.add('hidden');
+    }, duration);
+}
 
-  // 2. Format Waktu Detik ke format HH:MM:SS
-  function formatTime(seconds) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    return [h, m, s].map(v => v < 10 ? '0' + v : v).join(':');
-  }
+// ==================================================
+// UTILS: FORMAT COUNTDOWN (HH:MM:SS)
+// ==================================================
+function formatTime(seconds) {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
 
-  // 3. Fungsi Memulai Live Countdown
-  function startCountdown(totalSeconds) {
-    clearInterval(countdownInterval);
-    let remaining = totalSeconds;
+    const pad = (num) => String(num).padStart(2, '0');
+    return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+}
 
-    getKeyBtn.disabled = true;
-    countdownBox.classList.remove('hidden');
-    countdownTimer.textContent = formatTime(remaining);
+// ==================================================
+// COUNTDOWN TIMER CONTROLLER
+// ==================================================
+function startCountdown(durationSeconds) {
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    let remaining = durationSeconds;
+    countdownEl.textContent = formatTime(remaining);
 
     countdownInterval = setInterval(() => {
-      remaining--;
-      if (remaining <= 0) {
-        clearInterval(countdownInterval);
-        resetToReadyState();
-      } else {
-        countdownTimer.textContent = formatTime(remaining);
-      }
+        remaining--;
+        
+        if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            countdownEl.textContent = "00:00:00";
+            // Lakukan verifikasi ulang ke server sebelum mengaktifkan tombol
+            checkStatusOnLoad();
+        } else {
+            countdownEl.textContent = formatTime(remaining);
+        }
     }, 1000);
-  }
+}
 
-  // 4. Reset UI ketika Cooldown Selesai
-  function resetToReadyState() {
-    getKeyBtn.disabled = false;
-    countdownBox.classList.add('hidden');
-    statusMessage.textContent = 'READY TO CLAIM NEW KEY';
-    statusMessage.className = 'status-msg success';
-    statusText.textContent = 'System Ready';
-  }
+// ==================================================
+// UPDATE STATUS UI
+// ==================================================
+function setStatus(text, type = 'ready') {
+    statusText.textContent = text;
+    statusDot.className = 'status-dot';
+    if (type === 'cooldown') statusDot.classList.add('cooldown');
+    if (type === 'error') statusDot.classList.add('error');
+}
 
-  // 5. Cek Status Cooldown ke Server saat Page Load / Refresh
-  async function checkServerStatus() {
+// ==================================================
+// INITIAL CHECK (REFRESH / OPEN BROWSER)
+// ==================================================
+async function checkStatusOnLoad() {
+    const deviceId = getDeviceId();
+
     try {
-      const response = await fetchApi('/api/getkey?action=check');
-      const data = await response.json();
+        const response = await fetch('/api/getkey?action=check', {
+            method: 'GET',
+            headers: {
+                'X-Device-Identifier': deviceId
+            }
+        });
 
-      if (data.cooldown && data.remaining > 0) {
-        // Terapkan Kunci Server-Side
-        getKeyBtn.disabled = true;
-        statusMessage.textContent = 'KEY GENERATED SUCCESSFULLY';
-        statusMessage.className = 'status-msg cooldown';
-        statusText.textContent = 'Cooldown Active';
+        const data = await response.json();
 
-        if (data.key) {
-          keyInput.value = data.key;
-          resultBox.classList.remove('hidden');
+        if (data.cooldown) {
+            // Device masih dalam masa cooldown
+            currentKey = data.key;
+            keyDisplay.textContent = data.key;
+            copyKeyBtn.disabled = false;
+            getKeyBtn.disabled = true;
+            setStatus('COOLDOWN ACTIVE', 'cooldown');
+            startCountdown(data.remaining);
+        } else {
+            // Device siap mengambil key baru
+            keyDisplay.textContent = '••••••••••••••';
+            copyKeyBtn.disabled = true;
+            getKeyBtn.disabled = false;
+            countdownEl.textContent = "24:00:00";
+            setStatus('SYSTEM READY', 'ready');
+        }
+    } catch (error) {
+        console.error('Pengecekan gagal:', error);
+        setStatus('SERVER ERROR', 'error');
+    }
+}
+
+// ==================================================
+// ACTION: CLAIM KEY (ANTI DOUBLE CLICK)
+// ==================================================
+async function requestKey() {
+    // 1. Langsung disable tombol & aktifkan loader untuk mencegah double-click
+    getKeyBtn.disabled = true;
+    btnText.textContent = 'PROCESSING...';
+    btnLoader.classList.remove('hidden');
+    setStatus('FETCHING KEY...', 'ready');
+
+    const deviceId = getDeviceId();
+
+    try {
+        const response = await fetch('/api/getkey', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Device-Identifier': deviceId
+            }
+        });
+
+        const data = await response.json();
+
+        // Kembalikan tampilan tombol ke teks awal, tetapi tetapkan status disabled jika berhasil
+        btnLoader.classList.add('hidden');
+        btnText.textContent = 'GET KEY';
+
+        if (data.success) {
+            // Claim Berhasil
+            currentKey = data.key;
+            keyDisplay.textContent = data.key;
+            copyKeyBtn.disabled = false;
+            getKeyBtn.disabled = true; // Tombol tetap disabled
+            setStatus('KEY CLAIMED', 'ready');
+            startCountdown(data.remaining || 86400);
+            showToast('KEY SUCCESSFULLY GENERATED!');
+
+            // Eksekusi Shortlink jika diaktifkan
+            if (ENABLE_SHORTLINK && SHORTLINK_URL && SHORTLINK_URL !== "ISI_SHORTLINK_DI_SINI") {
+                showToast(`REDIRECTING IN ${SHORTLINK_DELAY / 1000}s...`, SHORTLINK_DELAY);
+                setTimeout(() => {
+                    window.location.href = SHORTLINK_URL;
+                }, SHORTLINK_DELAY);
+            }
+
+        } else if (data.cooldown) {
+            // Server menolak karena sedang Cooldown
+            currentKey = data.key;
+            keyDisplay.textContent = data.key;
+            copyKeyBtn.disabled = false;
+            getKeyBtn.disabled = true; // Tombol tetap disabled
+            setStatus('COOLDOWN ACTIVE', 'cooldown');
+            startCountdown(data.remaining);
+            showToast('DEVICE ALREADY CLAIMED A KEY');
+
+        } else if (data.message === 'ALL KEYS ARE USED') {
+            // Semua key pada keys.json habis
+            keyDisplay.textContent = 'OUT OF KEYS';
+            copyKeyBtn.disabled = true;
+            getKeyBtn.disabled = true; // Tombol disabled
+            setStatus('ALL KEYS ARE USED', 'error');
+            showToast('ALL KEYS ARE USED');
+
+        } else {
+            // Error lain dari server
+            setStatus('SERVER ERROR', 'error');
+            showToast(data.message || 'SERVER ERROR');
+            // Hanya aktifkan kembali tombol jika terjadi kesalahan sistem murni
+            getKeyBtn.disabled = false;
         }
 
-        startCountdown(data.remaining);
-      } else {
-        getKeyBtn.disabled = false;
-      }
     } catch (error) {
-      getKeyBtn.disabled = false;
+        console.error('Request gagal:', error);
+        btnLoader.classList.add('hidden');
+        btnText.textContent = 'GET KEY';
+        setStatus('SERVER ERROR', 'error');
+        showToast('FAILED TO CONNECT TO SERVER');
+        getKeyBtn.disabled = false; // Bolehkan retry jika koneksi terputus
     }
-  }
+}
 
-  // Jalankan Pengecekan Server Otomatis saat Halaman Dimuat
-  checkServerStatus();
+// ==================================================
+// ACTION: COPY KEY
+// ==================================================
+function copyKeyToClipboard() {
+    if (!currentKey) return;
 
-  // 6. Handling Klik Tombol GET KEY
-  getKeyBtn.addEventListener('click', async () => {
-    // Kunci tombol & Tampilkan Loader
-    getKeyBtn.disabled = true;
-    btnText.classList.add('hidden');
-    spinner.classList.remove('hidden');
-    statusMessage.classList.add('hidden');
-
+    // Gunakan execCommand untuk kompatibilitas lintas iFrame & mobile browser
+    const tempInput = document.createElement('input');
+    tempInput.value = currentKey;
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    
     try {
-      const response = await fetchApi('/api/getkey', { method: 'POST' });
-      const data = await response.json();
-
-      if (data.success) {
-        // PERTAMA KALI GET KEY BERHASIL
-        keyInput.value = data.key;
-        resultBox.classList.remove('hidden');
-        
-        statusMessage.textContent = 'KEY GENERATED SUCCESSFULLY';
-        statusMessage.className = 'status-msg success';
-        statusMessage.classList.remove('hidden');
-        statusText.textContent = 'Cooldown Active';
-
-        // PENTING: Tombol TETAP DISABLED dan langsung jalankan Cooldown 24 Jam
-        getKeyBtn.disabled = true;
-        startCountdown(data.remaining || 86400);
-
-      } else if (data.cooldown) {
-        // USER DALAM MASA COOLDOWN
-        statusMessage.textContent = 'COOLDOWN ACTIVE';
-        statusMessage.className = 'status-msg cooldown';
-        statusMessage.classList.remove('hidden');
-        statusText.textContent = 'Cooldown Active';
-
-        getKeyBtn.disabled = true;
-        startCountdown(data.remaining);
-
-      } else if (data.message === 'ALL KEYS ARE USED') {
-        // SEMUA KEY DIGUNAKAN
-        statusMessage.textContent = 'ALL KEYS ARE USED';
-        statusMessage.className = 'status-msg error';
-        statusMessage.classList.remove('hidden');
-        statusText.textContent = 'Keys Exhausted';
-
-        getKeyBtn.disabled = true;
-
-      } else {
-        // ERROR SERVER LAINNYA
-        statusMessage.textContent = data.message || 'SERVER ERROR';
-        statusMessage.className = 'status-msg error';
-        statusMessage.classList.remove('hidden');
-
-        getKeyBtn.disabled = false; // Boleh coba lagi jika server error murni
-      }
-    } catch (error) {
-      statusMessage.textContent = 'SERVER ERROR';
-      statusMessage.className = 'status-msg error';
-      statusMessage.classList.remove('hidden');
-
-      getKeyBtn.disabled = false;
-    } finally {
-      btnText.classList.remove('hidden');
-      spinner.classList.add('hidden');
-    }
-  });
-
-  // 7. Handling Copy Key Button
-  copyBtn.addEventListener('click', () => {
-    if (!keyInput.value) return;
-
-    keyInput.select();
-    keyInput.setSelectionRange(0, 99999);
-
-    try {
-      document.execCommand('copy');
-      showToast('Key berhasil disalin ke clipboard!');
+        document.execCommand('copy');
+        showToast('KEY COPIED TO CLIPBOARD!');
     } catch (err) {
-      showToast('Gagal menyalin key');
+        showToast('FAILED TO COPY KEY');
     }
-  });
+    
+    document.body.removeChild(tempInput);
+}
 
-  function showToast(message) {
-    toast.textContent = message;
-    toast.classList.remove('hidden');
-    setTimeout(() => {
-      toast.classList.add('hidden');
-    }, 3000);
-  }
-});
+// ==================================================
+// EVENT LISTENERS
+// ==================================================
+getKeyBtn.addEventListener('click', requestKey);
+copyKeyBtn.addEventListener('click', copyKeyToClipboard);
+
+// Jalankan pengecekan status awal saat halaman selesai dimuat
+window.addEventListener('DOMContentLoaded', checkStatusOnLoad);
