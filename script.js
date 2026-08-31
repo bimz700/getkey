@@ -2,7 +2,7 @@
 // KONFIGURASI SHORTLINK
 // ==================================================
 
-const SHORTLINK_URL = "https://sfl.gl/cSXqDyqz";
+const SHORTLINK_URL = "https://sfl.gl/bIg9bcf";
 
 // true = redirect ke ShortLink HANYA ketika halaman
 // di-refresh dalam kondisi device masih cooldown.
