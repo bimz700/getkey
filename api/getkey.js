@@ -1,143 +1,243 @@
-import { Redis } from '@upstash/redis';
-import fs from 'fs';
-import path from 'path';
+// ==================================================
+// KONFIGURASI SHORTLINK
+// ==================================================
+const SHORTLINK_URL = "ISI_SHORTLINK_DI_SINI";
+const ENABLE_SHORTLINK = false;
+const SHORTLINK_DELAY = 3000;
 
-// Inisialisasi Upstash Redis dari Environment Variables
-const redis = Redis.fromEnv();
+// ==================================================
+// ELEMEN DOM
+// ==================================================
+const getKeyBtn = document.getElementById('getKeyBtn');
+const copyKeyBtn = document.getElementById('copyKeyBtn');
+const keyDisplay = document.getElementById('keyDisplay');
+const statusText = document.getElementById('statusText');
+const statusDot = document.getElementById('statusDot');
+const countdownEl = document.getElementById('countdown');
+const toastEl = document.getElementById('toast');
+const btnText = getKeyBtn.querySelector('.btn-text');
+const btnLoader = getKeyBtn.querySelector('.btn-loader');
 
-export default async function handler(req, res) {
-  // Header CORS untuk HTTP Methods
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, X-Device-Identifier'
-  );
+let countdownInterval = null;
+let currentKey = null;
 
-  // Tangani preflight request (OPTIONS)
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  try {
-    // 1. Ekstraksi Device ID dari Header (Fallback ke IP jika header kosong)
-    const deviceHeader = req.headers['x-device-identifier'];
-    const rawIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
-    const clientIp = Array.isArray(rawIp) ? rawIp[0] : rawIp.split(',')[0].trim();
+// ==================================================
+// UTILS: DEVICE IDENTIFIER (localStorage)
+// ==================================================
+function getDeviceId() {
+    const STORAGE_KEY = 'mzmodz_device_id';
+    let deviceId = localStorage.getItem(STORAGE_KEY);
     
-    const deviceId = (deviceHeader && deviceHeader.trim().length > 0)
-      ? deviceHeader.trim()
-      : `ip_${clientIp.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-
-    const claimKey = `claim:${deviceId}`;
-    const usedKeysSetKey = 'used_keys_set';
-
-    // 2. Baca daftar key dari keys.json secara synchronous
-    const keysFilePath = path.join(process.cwd(), 'keys.json');
-    if (!fs.existsSync(keysFilePath)) {
-      console.error('File keys.json tidak ditemukan.');
-      return res.status(500).json({ success: false, message: 'SERVER ERROR' });
+    if (!deviceId) {
+        // Buat ID unik secara otomatis jika belum ada
+        deviceId = 'mz_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem(STORAGE_KEY, deviceId);
     }
-
-    const keysFileContent = fs.readFileSync(keysFilePath, 'utf8');
-    const allKeys = JSON.parse(keysFileContent);
-
-    if (!Array.isArray(allKeys) || allKeys.length === 0) {
-      return res.status(500).json({ success: false, message: 'SERVER ERROR' });
-    }
-
-    // 3. Cek apakah device sedang dalam cooldown 24 jam
-    const existingKey = await redis.get(claimKey);
-    if (existingKey) {
-      const ttl = await redis.ttl(claimKey);
-      const remainingSeconds = ttl > 0 ? ttl : 0;
-
-      return res.status(200).json({
-        success: false,
-        cooldown: true,
-        remaining: remainingSeconds,
-        key: existingKey
-      });
-    }
-
-    // Cek action parameter untuk pengecekan status awal dari frontend
-    const action = req.query?.action || req.body?.action;
-    if (action === 'check') {
-      return res.status(200).json({
-        success: true,
-        cooldown: false,
-        remaining: 0
-      });
-    }
-
-    // 4. Proses pengambilan key baru secara random & atomic
-    const usedKeys = await redis.smembers(usedKeysSetKey);
-    const usedSet = new Set(usedKeys || []);
-    const availableKeys = allKeys.filter(k => !usedSet.has(k));
-
-    // Jika seluruh key pada keys.json sudah terpakai
-    if (availableKeys.length === 0) {
-      return res.status(200).json({
-        success: false,
-        message: 'ALL KEYS ARE USED'
-      });
-    }
-
-    // Acak daftar key yang tersedia (Randomization)
-    const shuffledKeys = [...availableKeys].sort(() => Math.random() - 0.5);
-
-    let selectedKey = null;
-
-    // Gunakan Redis SADD untuk melakukan reservasi atomic
-    for (const candidate of shuffledKeys) {
-      const isReserved = await redis.sadd(usedKeysSetKey, candidate);
-      if (isReserved === 1) {
-        selectedKey = candidate;
-        break;
-      }
-    }
-
-    // Jika terjadi race condition dan tidak ada key yang bisa di-reserve
-    if (!selectedKey) {
-      return res.status(200).json({
-        success: false,
-        message: 'ALL KEYS ARE USED'
-      });
-    }
-
-    // 5. Simpan data claim device ke Redis dengan TTL 86400 detik (24 Jam)
-    const claimResult = await redis.set(claimKey, selectedKey, {
-      nx: true,
-      ex: 86400
-    });
-
-    // Handle situasi jika claim gagal karena request ganda bersamaan (Rollback)
-    if (!claimResult) {
-      await redis.srem(usedKeysSetKey, selectedKey);
-      const activeClaimKey = await redis.get(claimKey);
-      const ttl = await redis.ttl(claimKey);
-
-      return res.status(200).json({
-        success: false,
-        cooldown: true,
-        remaining: ttl > 0 ? ttl : 86400,
-        key: activeClaimKey || selectedKey
-      });
-    }
-
-    // 6. Pengambilan key berhasil
-    return res.status(200).json({
-      success: true,
-      key: selectedKey,
-      remaining: 86400
-    });
-
-  } catch (error) {
-    console.error('Database/Server Error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'SERVER ERROR'
-    });
-  }
+    return deviceId;
 }
+
+// ==================================================
+// UTILS: TOAST NOTIFICATION
+// ==================================================
+function showToast(message, duration = 3000) {
+    toastEl.textContent = message;
+    toastEl.classList.remove('hidden');
+    setTimeout(() => {
+        toastEl.classList.add('hidden');
+    }, duration);
+}
+
+// ==================================================
+// UTILS: FORMAT COUNTDOWN (HH:MM:SS)
+// ==================================================
+function formatTime(seconds) {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    const pad = (num) => String(num).padStart(2, '0');
+    return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+}
+
+// ==================================================
+// COUNTDOWN TIMER CONTROLLER
+// ==================================================
+function startCountdown(durationSeconds) {
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    let remaining = durationSeconds;
+    countdownEl.textContent = formatTime(remaining);
+
+    countdownInterval = setInterval(() => {
+        remaining--;
+        
+        if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            countdownEl.textContent = "00:00:00";
+            // Lakukan verifikasi ulang ke server sebelum mengaktifkan tombol
+            checkStatusOnLoad();
+        } else {
+            countdownEl.textContent = formatTime(remaining);
+        }
+    }, 1000);
+}
+
+// ==================================================
+// UPDATE STATUS UI
+// ==================================================
+function setStatus(text, type = 'ready') {
+    statusText.textContent = text;
+    statusDot.className = 'status-dot';
+    if (type === 'cooldown') statusDot.classList.add('cooldown');
+    if (type === 'error') statusDot.classList.add('error');
+}
+
+// ==================================================
+// INITIAL CHECK (REFRESH / OPEN BROWSER)
+// ==================================================
+async function checkStatusOnLoad() {
+    const deviceId = getDeviceId();
+
+    try {
+        const response = await fetch('/api/getkey?action=check', {
+            method: 'GET',
+            headers: {
+                'X-Device-Identifier': deviceId
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.cooldown) {
+            // Device masih dalam masa cooldown
+            currentKey = data.key;
+            keyDisplay.textContent = data.key;
+            copyKeyBtn.disabled = false;
+            getKeyBtn.disabled = true;
+            setStatus('COOLDOWN ACTIVE', 'cooldown');
+            startCountdown(data.remaining);
+        } else {
+            // Device siap mengambil key baru
+            keyDisplay.textContent = '••••••••••••••';
+            copyKeyBtn.disabled = true;
+            getKeyBtn.disabled = false;
+            countdownEl.textContent = "24:00:00";
+            setStatus('SYSTEM READY', 'ready');
+        }
+    } catch (error) {
+        console.error('Pengecekan gagal:', error);
+        setStatus('SERVER ERROR', 'error');
+    }
+}
+
+// ==================================================
+// ACTION: CLAIM KEY (ANTI DOUBLE CLICK)
+// ==================================================
+async function requestKey() {
+    // 1. Langsung disable tombol & aktifkan loader untuk mencegah double-click
+    getKeyBtn.disabled = true;
+    btnText.textContent = 'PROCESSING...';
+    btnLoader.classList.remove('hidden');
+    setStatus('FETCHING KEY...', 'ready');
+
+    const deviceId = getDeviceId();
+
+    try {
+        const response = await fetch('/api/getkey', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Device-Identifier': deviceId
+            }
+        });
+
+        const data = await response.json();
+
+        // Kembalikan tampilan tombol ke teks awal, tetapi tetapkan status disabled jika berhasil
+        btnLoader.classList.add('hidden');
+        btnText.textContent = 'GET KEY';
+
+        if (data.success) {
+            // Claim Berhasil
+            currentKey = data.key;
+            keyDisplay.textContent = data.key;
+            copyKeyBtn.disabled = false;
+            getKeyBtn.disabled = true; // Tombol tetap disabled
+            setStatus('KEY CLAIMED', 'ready');
+            startCountdown(data.remaining || 86400);
+            showToast('KEY SUCCESSFULLY GENERATED!');
+
+            // Eksekusi Shortlink jika diaktifkan
+            if (ENABLE_SHORTLINK && SHORTLINK_URL && SHORTLINK_URL !== "ISI_SHORTLINK_DI_SINI") {
+                showToast(`REDIRECTING IN ${SHORTLINK_DELAY / 1000}s...`, SHORTLINK_DELAY);
+                setTimeout(() => {
+                    window.location.href = SHORTLINK_URL;
+                }, SHORTLINK_DELAY);
+            }
+
+        } else if (data.cooldown) {
+            // Server menolak karena sedang Cooldown
+            currentKey = data.key;
+            keyDisplay.textContent = data.key;
+            copyKeyBtn.disabled = false;
+            getKeyBtn.disabled = true; // Tombol tetap disabled
+            setStatus('COOLDOWN ACTIVE', 'cooldown');
+            startCountdown(data.remaining);
+            showToast('DEVICE ALREADY CLAIMED A KEY');
+
+        } else if (data.message === 'ALL KEYS ARE USED') {
+            // Semua key pada keys.json habis
+            keyDisplay.textContent = 'OUT OF KEYS';
+            copyKeyBtn.disabled = true;
+            getKeyBtn.disabled = true; // Tombol disabled
+            setStatus('ALL KEYS ARE USED', 'error');
+            showToast('ALL KEYS ARE USED');
+
+        } else {
+            // Error lain dari server
+            setStatus('SERVER ERROR', 'error');
+            showToast(data.message || 'SERVER ERROR');
+            // Hanya aktifkan kembali tombol jika terjadi kesalahan sistem murni
+            getKeyBtn.disabled = false;
+        }
+
+    } catch (error) {
+        console.error('Request gagal:', error);
+        btnLoader.classList.add('hidden');
+        btnText.textContent = 'GET KEY';
+        setStatus('SERVER ERROR', 'error');
+        showToast('FAILED TO CONNECT TO SERVER');
+        getKeyBtn.disabled = false; // Bolehkan retry jika koneksi terputus
+    }
+}
+
+// ==================================================
+// ACTION: COPY KEY
+// ==================================================
+function copyKeyToClipboard() {
+    if (!currentKey) return;
+
+    // Gunakan execCommand untuk kompatibilitas lintas iFrame & mobile browser
+    const tempInput = document.createElement('input');
+    tempInput.value = currentKey;
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    
+    try {
+        document.execCommand('copy');
+        showToast('KEY COPIED TO CLIPBOARD!');
+    } catch (err) {
+        showToast('FAILED TO COPY KEY');
+    }
+    
+    document.body.removeChild(tempInput);
+}
+
+// ==================================================
+// EVENT LISTENERS
+// ==================================================
+getKeyBtn.addEventListener('click', requestKey);
+copyKeyBtn.addEventListener('click', copyKeyToClipboard);
+
+// Jalankan pengecekan status awal saat halaman selesai dimuat
+window.addEventListener('DOMContentLoaded', checkStatusOnLoad);
