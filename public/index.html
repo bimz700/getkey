@@ -1,61 +1,68 @@
+```html
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GET KEY MZMODZ</title>
-  <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Roboto+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MZMODZ - GET KEY PORTAL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="background-overlay"></div>
-  
-  <div class="container">
-    <div class="card">
-      <div class="header">
-        <h1 class="brand-title">MZMODZ</h1>
-        <p class="subtitle">VIP ACCESS KEY GENERATOR</p>
-      </div>
+    <div class="bg-glow"></div>
 
-      <div class="status-badge" id="statusBadge">
-        <span class="dot"></span> <span id="statusText">System Ready</span>
-      </div>
+    <div class="container">
+        <!-- Header Brand -->
+        <header class="header">
+            <h1 class="brand-title">MZMODZ</h1>
+            <p class="brand-subtitle">VIP ACCESS KEY PORTAL</p>
+        </header>
 
-      <div class="instruction" id="instructionText">
-        Klik tombol di bawah ini untuk mendapatkan lisensi key Anda. Key berlaku selama 24 jam.
-      </div>
+        <!-- Main Card -->
+        <main class="card">
+            <div class="card-badge">AUTHENTICATION</div>
 
-      <!-- Button GET KEY -->
-      <button id="getKeyBtn" class="btn-primary">
-        <span class="btn-text">GET KEY</span>
-        <span class="spinner hidden"></span>
-      </button>
+            <!-- Key Display Box -->
+            <div class="key-box">
+                <span id="keyDisplay" class="key-text">••••••••••••••</span>
+            </div>
 
-      <!-- Status Message & Countdown Display -->
-      <div id="statusMessage" class="status-msg hidden"></div>
-      
-      <div id="countdownBox" class="countdown-box hidden">
-        <label>COOLDOWN REMAINING:</label>
-        <div id="countdownTimer" class="timer-display">24:00:00</div>
-      </div>
+            <!-- Status Indicator -->
+            <div class="status-container">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText" class="status-text">SYSTEM READY</span>
+            </div>
 
-      <!-- Result Key Display -->
-      <div id="resultBox" class="result-box hidden">
-        <label>YOUR VIP KEY:</label>
-        <div class="key-display-wrapper">
-          <input type="text" id="keyInput" readonly value="">
-          <button id="copyBtn" class="btn-copy">COPY</button>
-        </div>
-      </div>
+            <!-- Timer Countdown -->
+            <div class="timer-container" id="timerContainer">
+                <span class="timer-label">COOLDOWN REMAINING</span>
+                <div id="countdown" class="timer-display">24:00:00</div>
+            </div>
 
-      <div id="toast" class="toast hidden"></div>
+            <!-- Notification Toast -->
+            <div id="toast" class="toast hidden"></div>
 
-      <div class="footer">
-        &copy; 2026 MZMODZ Official. All rights reserved.
-      </div>
+            <!-- Action Buttons -->
+            <div class="actions">
+                <button id="getKeyBtn" class="btn btn-primary">
+                    <span class="btn-text">GET KEY</span>
+                    <span class="btn-loader hidden"></span>
+                </button>
+                <button id="copyKeyBtn" class="btn btn-secondary" disabled>
+                    COPY KEY
+                </button>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2026 MZMODZ OFFICIAL. ALL RIGHTS RESERVED.</p>
+        </footer>
     </div>
-  </div>
 
-  <script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
+```
