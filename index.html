@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZMODZ — Admin Panel</title>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<main class="wrap">
+<section id="loginCard" class="card">
+  <div class="brand">MZ<span>MODZ</span></div>
+  <p class="subtitle">ADMIN PANEL</p>
+  <input id="email" type="email" placeholder="Email admin" autocomplete="username">
+  <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+  <button id="loginBtn">LOGIN</button>
+  <p id="loginStatus" class="status"></p>
+</section>
+
+<section id="panel" class="card hidden">
+  <div class="topbar">
+    <div>
+      <div class="brand small">MZ<span>MODZ</span></div>
+      <div id="adminEmail" class="muted"></div>
+    </div>
+    <button id="logoutBtn" class="danger smallBtn">LOGOUT</button>
+  </div>
+
+  <h3>KEY MANAGEMENT</h3>
+  <div class="generate">
+    <input id="keyInput" placeholder="Masukkan key sendiri" autocomplete="off">
+    <input id="maxDevices" type="number" min="0" max="100000" value="1" placeholder="Device limit">
+    <select id="keyStatusSelect">
+      <option value="active">ACTIVE</option>
+      <option value="disabled">DISABLED</option>
+    </select>
+    <button id="saveKeyBtn">SAVE KEY</button>
+  </div>
+  <small class="hint">Device limit bebas. Isi 0 untuk unlimited.</small>
+  <p id="keyStatus" class="status"></p>
+
+  <h3>APP CONTROL</h3>
+  <div class="systemGrid">
+    <label><input id="maintenance" type="checkbox"> MAINTENANCE APP</label>
+    <label><input id="updateMode" type="checkbox"> UPDATE APP</label>
+    <input id="maintenanceMessage" placeholder="Pesan maintenance">
+    <input id="updateMessage" placeholder="Pesan update">
+    <input id="version" placeholder="Versi, contoh: 2.1">
+    <input id="downloadUrl" placeholder="Link update APK (opsional)">
+  </div>
+  <button id="saveSystemBtn">SAVE APP CONTROL</button>
+  <p id="panelStatus" class="status"></p>
+
+  <div class="sectionTitle"><h3>KEY LIST</h3><button id="refreshBtn" class="smallBtn">REFRESH</button></div>
+  <div class="tableWrap">
+    <table>
+      <thead><tr><th>KEY</th><th>STATUS</th><th>DEVICES</th><th>CREATED</th><th>ACTION</th></tr></thead>
+      <tbody id="keyTable"></tbody>
+    </table>
+  </div>
+</section>
+</main>
+<script type="module" src="admin.js"></script>
+</body>
+</html>
