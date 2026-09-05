@@ -91,7 +91,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, message: "UNKNOWN ACTION" });
   } catch (error) {
     console.error("ADMIN ERROR", error);
+
     const status = error.status || 500;
-    return res.status(status).json({ success: false, message: status === 500 ? "SERVER ERROR" : error.message });
+
+    return res.status(status).json({
+      success: false,
+      message: error.message || "SERVER ERROR"
+    });
   }
 }
