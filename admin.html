@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MZMODZ — Admin</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <main class="wrap">
+    <section id="loginCard" class="card">
+      <div class="brand">MZ<span>MODZ</span></div>
+      <p class="subtitle">ADMIN PANEL</p>
+      <input id="email" type="email" placeholder="Admin email" autocomplete="username">
+      <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+      <button id="loginBtn">LOGIN</button>
+      <p id="loginStatus" class="status"></p>
+    </section>
+
+    <section id="panel" class="card hidden">
+      <div class="topbar">
+        <div>
+          <div class="brand small">MZ<span>MODZ</span></div>
+          <div id="adminEmail" class="muted"></div>
+        </div>
+        <button id="logoutBtn" class="danger smallBtn">LOGOUT</button>
+      </div>
+
+      <div class="generate">
+        <input id="count" type="number" min="1" max="100" value="1">
+        <button id="generateBtn">GENERATE KEY</button>
+      </div>
+
+      <p id="panelStatus" class="status"></p>
+
+      <div class="tableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>KEY</th>
+              <th>STATUS</th>
+              <th>ACTION</th>
+            </tr>
+          </thead>
+          <tbody id="keyTable"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="admin.js"></script>
+</body>
+</html>
