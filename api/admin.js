@@ -1,234 +1,746 @@
 import { db } from "./firebase.js";
 import { requireAdmin } from "./auth.js";
 
+
+/* =========================
+   CORS
+========================= */
+
 function cors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "*"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate"
+  );
 }
+
+
+/* =========================
+   NORMALIZE KEY
+========================= */
 
 function normalizeKey(value) {
-  return String(value || "").trim().toUpperCase();
+
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+
 }
+
+
+/* =========================
+   NORMALIZE CLAIMS
+========================= */
 
 function normalizeClaims(claims) {
-  if (!claims || typeof claims !== "object") return [];
 
-  return Object.entries(claims)
-    .map(([device, value]) => {
-      value = value || {};
-
-      return {
-        device: String(value.device || device),
-        ip: String(value.ip || "unknown-ip"),
-        claimedAt: Number(value.claimedAt || 0),
-        expiredAt: Number(value.expiredAt || 0),
-        deviceIndex: Number(value.deviceIndex || 0)
-      };
-    })
-    .sort((a, b) => b.claimedAt - a.claimedAt);
-}
-
-async function readKeys() {
-  const snapshot = await db.ref("keys").get();
-  const values = snapshot.val() || {};
-
-  return Object.entries(values)
-    .map(([key, value]) => {
-      value = value || {};
-
-      const claims = normalizeClaims(value.claims);
-
-      return {
-        key,
-        status: value.status || "active",
-        createdAt: Number(value.createdAt || 0),
-        updatedAt: Number(value.updatedAt || 0),
-        maxDevices: Number(value.maxDevices || 0),
-        claimCount: claims.length,
-        claims
-      };
-    })
-    .sort((a, b) => b.createdAt - a.createdAt);
-}
-
-export default async function handler(req, res) {
-  cors(res);
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
+  if (
+    !claims ||
+    typeof claims !== "object"
+  ) {
+    return [];
   }
 
+  return Object.entries(claims)
+
+    .map(([device, value]) => {
+
+      value = value || {};
+
+      return {
+
+        device:
+          String(
+            value.device || device
+          ),
+
+        ip:
+          String(
+            value.ip || "unknown-ip"
+          ),
+
+        claimedAt:
+          Number(
+            value.claimedAt || 0
+          ),
+
+        expiredAt:
+          Number(
+            value.expiredAt || 0
+          ),
+
+        deviceIndex:
+          Number(
+            value.deviceIndex || 0
+          )
+
+      };
+
+    })
+
+    .sort(
+      (a, b) =>
+        b.claimedAt - a.claimedAt
+    );
+
+}
+
+
+/* =========================
+   READ KEYS
+========================= */
+
+async function readKeys() {
+
+  const snapshot =
+    await db.ref("keys").get();
+
+  const values =
+    snapshot.val() || {};
+
+  return Object.entries(values)
+
+    .map(([key, value]) => {
+
+      value = value || {};
+
+      const claims =
+        normalizeClaims(
+          value.claims
+        );
+
+      return {
+
+        key,
+
+        status:
+          value.status ||
+          "active",
+
+        createdAt:
+          Number(
+            value.createdAt || 0
+          ),
+
+        updatedAt:
+          Number(
+            value.updatedAt || 0
+          ),
+
+        maxDevices:
+          Number(
+            value.maxDevices || 0
+          ),
+
+        claimCount:
+          claims.length,
+
+        claims
+
+      };
+
+    })
+
+    .sort(
+      (a, b) =>
+        b.createdAt - a.createdAt
+    );
+
+}
+
+
+/* =========================
+   MAIN HANDLER
+========================= */
+
+export default async function handler(
+  req,
+  res
+) {
+
+  cors(res);
+
+
+  /* =========================
+     OPTIONS
+  ========================= */
+
+  if (
+    req.method === "OPTIONS"
+  ) {
+
+    return res
+      .status(204)
+      .end();
+
+  }
+
+
   try {
+
+    /* =========================
+       ADMIN AUTH
+    ========================= */
+
     await requireAdmin(req);
 
-    if (req.method === "GET") {
-      const [keys, systemSnap] = await Promise.all([
+
+    /* =========================
+       GET
+    ========================= */
+
+    if (
+      req.method === "GET"
+    ) {
+
+      const [
+        keys,
+        systemSnap
+      ] = await Promise.all([
+
         readKeys(),
+
         db.ref("system").get()
+
       ]);
 
-      return res.status(200).json({
-        success: true,
-        keys,
-        system: systemSnap.val() || {}
-      });
+
+      return res
+        .status(200)
+        .json({
+
+          success: true,
+
+          keys,
+
+          system:
+            systemSnap.val() || {}
+
+        });
+
     }
 
-    if (req.method !== "POST") {
-      return res.status(405).json({
-        success: false,
-        message: "METHOD NOT ALLOWED"
-      });
+
+    /* =========================
+       ONLY POST
+    ========================= */
+
+    if (
+      req.method !== "POST"
+    ) {
+
+      return res
+        .status(405)
+        .json({
+
+          success: false,
+
+          message:
+            "METHOD NOT ALLOWED"
+
+        });
+
     }
+
+
+    /* =========================
+       BODY
+    ========================= */
 
     const body =
+
       typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : (req.body || {});
 
-    const action = String(body.action || "");
-    const now = Date.now();
+        ? JSON.parse(
+            req.body || "{}"
+          )
 
-    if (action === "saveKey") {
-      const key = normalizeKey(body.key);
+        : (
+            req.body || {}
+          );
 
-      const maxDevicesRaw = Number(body.maxDevices);
+
+    const action =
+      String(
+        body.action || ""
+      );
+
+
+    const now =
+      Date.now();
+
+
+    /* ==================================================
+       SAVE KEY
+    ================================================== */
+
+    if (
+      action === "saveKey"
+    ) {
+
+      const key =
+        normalizeKey(
+          body.key
+        );
+
+
+      const maxDevicesRaw =
+        Number(
+          body.maxDevices
+        );
+
+
       const maxDevices =
-        maxDevicesRaw <= 0
-          ? 0
-          : Math.min(100000, Math.floor(maxDevicesRaw));
 
-      if (!/^[A-Z0-9][A-Z0-9_-]{2,100}$/.test(key)) {
-        return res.status(400).json({
-          success: false,
-          message: "INVALID KEY"
-        });
+        maxDevicesRaw <= 0
+
+          ? 0
+
+          : Math.min(
+              100000,
+              Math.floor(
+                maxDevicesRaw
+              )
+            );
+
+
+      if (
+        !/^[A-Z0-9][A-Z0-9_-]{2,100}$/
+          .test(key)
+      ) {
+
+        return res
+          .status(400)
+          .json({
+
+            success: false,
+
+            message:
+              "INVALID KEY"
+
+          });
+
       }
 
-      const ref = db.ref(`keys/${key}`);
-      const existing = await ref.get();
-      const current = existing.val() || {};
+
+      const ref =
+        db.ref(
+          `keys/${key}`
+        );
+
+
+      const existing =
+        await ref.get();
+
+
+      const current =
+        existing.val() || {};
+
 
       await ref.set({
+
         ...current,
-        status: body.status === "disabled" ? "disabled" : "active",
+
+        status:
+          body.status ===
+          "disabled"
+            ? "disabled"
+            : "active",
+
         maxDevices,
-        createdAt: Number(current.createdAt || now),
-        updatedAt: now,
-        claims: current.claims || {}
+
+        createdAt:
+          Number(
+            current.createdAt ||
+            now
+          ),
+
+        updatedAt:
+          now,
+
+        claims:
+          current.claims || {}
+
       });
 
-      return res.status(200).json({
-        success: true,
-        key
-      });
+
+      return res
+        .status(200)
+        .json({
+
+          success: true,
+
+          key
+
+        });
+
     }
 
-    if (action === "setStatus") {
-      const key = normalizeKey(body.key);
+
+    /* ==================================================
+       SET KEY STATUS
+    ================================================== */
+
+    if (
+      action === "setStatus"
+    ) {
+
+      const key =
+        normalizeKey(
+          body.key
+        );
+
 
       const status =
-        body.status === "disabled"
+        body.status ===
+        "disabled"
+
           ? "disabled"
+
           : "active";
 
-      const ref = db.ref(`keys/${key}`);
-      const snapshot = await ref.get();
 
-      if (!snapshot.exists()) {
-        return res.status(404).json({
-          success: false,
-          message: "KEY NOT FOUND"
-        });
+      const ref =
+        db.ref(
+          `keys/${key}`
+        );
+
+
+      const snapshot =
+        await ref.get();
+
+
+      if (
+        !snapshot.exists()
+      ) {
+
+        return res
+          .status(404)
+          .json({
+
+            success: false,
+
+            message:
+              "KEY NOT FOUND"
+
+          });
+
       }
+
 
       await ref.update({
+
         status,
-        updatedAt: now
+
+        updatedAt:
+          now
+
       });
 
-      return res.status(200).json({
-        success: true,
-        key,
-        status
-      });
+
+      return res
+        .status(200)
+        .json({
+
+          success: true,
+
+          key,
+
+          status
+
+        });
+
     }
 
-    if (action === "deleteKey") {
-      const key = normalizeKey(body.key);
 
-      const ref = db.ref(`keys/${key}`);
+    /* ==================================================
+       DELETE KEY
+    ================================================== */
 
-      if (!(await ref.get()).exists()) {
-        return res.status(404).json({
-          success: false,
-          message: "KEY NOT FOUND"
-        });
+    if (
+      action === "deleteKey"
+    ) {
+
+      const key =
+        normalizeKey(
+          body.key
+        );
+
+
+      const ref =
+        db.ref(
+          `keys/${key}`
+        );
+
+
+      const snapshot =
+        await ref.get();
+
+
+      if (
+        !snapshot.exists()
+      ) {
+
+        return res
+          .status(404)
+          .json({
+
+            success: false,
+
+            message:
+              "KEY NOT FOUND"
+
+          });
+
       }
+
 
       await ref.remove();
 
-      return res.status(200).json({
-        success: true,
-        key
-      });
+
+      return res
+        .status(200)
+        .json({
+
+          success: true,
+
+          key
+
+        });
+
     }
 
-    if (action === "saveSystem") {
-      const maintenance = Boolean(body.maintenance);
-      const updateMode = Boolean(body.updateMode);
 
-      const maintenanceMessage = String(
-        body.maintenanceMessage ||
-        "Sedang maintenance, silakan coba lagi nanti."
-      ).slice(0, 500);
+    /* ==================================================
+       SAVE APP CONTROL
+    ================================================== */
 
-      const updateMessage = String(
-        body.updateMessage ||
-        "Silakan update ke versi terbaru."
-      ).slice(0, 500);
+    if (
+      action === "saveSystem"
+    ) {
 
-      const version = String(
-        body.version || ""
-      ).slice(0, 50);
+      const maintenance =
+        body.maintenance === true;
 
-      const downloadUrl = String(
-        body.downloadUrl || ""
-      ).slice(0, 1000);
 
-      await db.ref("system").set({
+      const updateMode =
+        body.updateMode === true;
+
+
+      const maintenanceMessage =
+
+        String(
+
+          body.maintenanceMessage ||
+
+          "Sedang maintenance, silakan coba lagi nanti."
+
+        )
+          .slice(0, 500);
+
+
+      const updateMessage =
+
+        String(
+
+          body.updateMessage ||
+
+          "Silakan update ke versi terbaru."
+
+        )
+          .slice(0, 500);
+
+
+      const version =
+
+        String(
+          body.version || ""
+        )
+          .slice(0, 50);
+
+
+      const downloadUrl =
+
+        String(
+          body.downloadUrl || ""
+        )
+          .slice(0, 1000);
+
+
+      /*
+       * PENTING:
+       * Pakai UPDATE, bukan SET.
+       *
+       * Supaya /system/announcement
+       * tidak ikut terhapus.
+       */
+
+      await db.ref("system").update({
+
         maintenance,
+
         updateMode,
+
         maintenanceMessage,
+
         updateMessage,
+
         version,
+
         downloadUrl,
-        updatedAt: now
+
+        updatedAt:
+          now
+
       });
 
-      return res.status(200).json({
-        success: true
-      });
+
+      return res
+        .status(200)
+        .json({
+
+          success: true,
+
+          message:
+            "System settings berhasil disimpan."
+
+        });
+
     }
 
-    return res.status(400).json({
-      success: false,
-      message: "UNKNOWN ACTION"
-    });
+
+    /* ==================================================
+       SAVE ANNOUNCEMENT
+    ================================================== */
+
+    if (
+      action === "saveAnnouncement"
+    ) {
+
+      const enabled =
+        body.enabled === true;
+
+
+      const title =
+
+        String(
+          body.title ||
+          "PENGUMUMAN"
+        )
+          .trim()
+          .slice(0, 100);
+
+
+      const message =
+
+        String(
+          body.message || ""
+        )
+          .trim()
+          .slice(0, 2000);
+
+
+      await db
+        .ref(
+          "system/announcement"
+        )
+        .set({
+
+          enabled,
+
+          title,
+
+          message,
+
+          updatedAt:
+            now
+
+        });
+
+
+      return res
+        .status(200)
+        .json({
+
+          success: true,
+
+          message:
+            "Announcement berhasil disimpan.",
+
+          announcement: {
+
+            enabled,
+
+            title,
+
+            message
+
+          }
+
+        });
+
+    }
+
+
+    /* ==================================================
+       UNKNOWN ACTION
+    ================================================== */
+
+    return res
+      .status(400)
+      .json({
+
+        success: false,
+
+        message:
+          "UNKNOWN ACTION"
+
+      });
+
 
   } catch (error) {
-    console.error("ADMIN ERROR", error);
 
-    const status = error.status || 500;
+    console.error(
+      "ADMIN ERROR",
+      error
+    );
 
-    return res.status(status).json({
-      success: false,
-      message:
-        status === 500
-          ? "SERVER ERROR"
-          : error.message
-    });
+
+    const status =
+      error.status || 500;
+
+
+    return res
+      .status(status)
+      .json({
+
+        success: false,
+
+        message:
+
+          status === 500
+
+            ? "SERVER ERROR"
+
+            : error.message
+
+      });
+
   }
+
 }
