@@ -1,4 +1,7 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+
 import {
   getAuth,
   signInWithEmailAndPassword,
@@ -36,146 +39,317 @@ const maintenanceMessage = $("maintenanceMessage");
 const updateMessage = $("updateMessage");
 const version = $("version");
 const downloadUrl = $("downloadUrl");
+
 const saveSystemBtn = $("saveSystemBtn");
 const panelStatus = $("panelStatus");
 
-const announcementEnabled = $("announcementEnabled");
-const announcementTitle = $("announcementTitle");
-const announcementMessage = $("announcementMessage");
-const saveAnnouncementBtn = $("saveAnnouncementBtn");
-const announcementStatus = $("announcementStatus");
+/*
+ * ANNOUNCEMENT
+ */
 
+const announcementEnabled =
+  $("announcementEnabled");
+
+const announcementTitle =
+  $("announcementTitle");
+
+const announcementMessage =
+  $("announcementMessage");
+
+const saveAnnouncementBtn =
+  $("saveAnnouncementBtn");
+
+
+/*
+ * API
+ */
 
 async function apiRequest(options = {}) {
+
   if (!auth.currentUser) {
     throw new Error("NOT_AUTHENTICATED");
   }
 
-  const token = await auth.currentUser.getIdToken();
+  const token =
+    await auth.currentUser.getIdToken();
 
-  const response = await fetch("/api/admin", {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {})
-    },
-    cache: "no-store"
-  });
+  const response =
+    await fetch("/api/admin", {
 
-  const data = await response.json().catch(() => ({}));
+      ...options,
+
+      headers: {
+        "Content-Type": "application/json",
+
+        Authorization:
+          `Bearer ${token}`,
+
+        ...(options.headers || {})
+      },
+
+      cache: "no-store"
+    });
+
+  const data =
+    await response
+      .json()
+      .catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.message || `HTTP ${response.status}`);
+
+    throw new Error(
+      data.message ||
+      `HTTP ${response.status}`
+    );
+
   }
 
   return data;
 }
 
 
-function esc(v) {
-  return String(v ?? "")
+/*
+ * ESCAPE HTML
+ */
+
+function esc(value) {
+
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+
 }
 
+
+/*
+ * DATE
+ */
 
 function date(ms) {
-  return ms ? new Date(ms).toLocaleString("id-ID") : "-";
+
+  if (!ms) {
+    return "-";
+  }
+
+  return new Date(ms)
+    .toLocaleString("id-ID");
+
 }
 
+
+/*
+ * EXPIRY
+ */
+
+function expiry(ms) {
+
+  if (!ms || Number(ms) <= 0) {
+    return "UNLIMITED";
+  }
+
+  return date(ms);
+
+}
+
+
+/*
+ * RENDER KEYS
+ */
 
 function render(keys) {
-  keyTable.innerHTML = keys.map(k => {
 
-    const claims = k.claims || [];
-    const max = Number(k.maxDevices || 0);
+  keyTable.innerHTML =
+    keys.map(k => {
 
-    const devices =
-      max > 0
-        ? `${claims.length}/${max}`
-        : `${claims.length}/∞`;
+      const claims =
+        Array.isArray(k.claims)
+          ? k.claims
+          : [];
 
-    const details = claims.length
-      ? claims.map(c => `
-          <div class="claim">
-            <b>Device:</b> ${esc(c.device)}<br>
-            <b>IP:</b> ${esc(c.ip)}<br>
-            <b>Time:</b> ${esc(date(c.claimedAt))}
-          </div>
-        `).join("")
-      : `<div class="muted">Belum ada device.</div>`;
+      const max =
+        Number(k.maxDevices || 0);
 
-    return `
-      <tr>
-        <td class="key">${esc(k.key)}</td>
+      const devices =
+        max > 0
+          ? `${claims.length}/${max}`
+          : `${claims.length}/∞`;
 
-        <td>
-          <span class="badge ${k.status === "disabled" ? "off" : "on"}">
-            ${k.status.toUpperCase()}
-          </span>
-        </td>
+      const details =
+        claims.length
 
-        <td>${devices}</td>
+          ? claims.map((c, index) => {
 
-        <td>${date(k.createdAt)}</td>
+              const deviceNumber =
+                c.deviceIndex > 0
+                  ? c.deviceIndex
+                  : index + 1;
 
-        <td>
-          <button data-view="${esc(k.key)}">
-            DEVICES
-          </button>
+              return `
+                <div class="claim">
 
-          <button
-            data-action="${k.status === "disabled" ? "enable" : "disable"}"
-            data-key="${esc(k.key)}"
-          >
-            ${k.status === "disabled" ? "ENABLE" : "DISABLE"}
-          </button>
+                  <b>DEVICE:</b>
+                  ${deviceNumber}${max > 0 ? "/" + max : ""}
 
-          <button
-            class="danger"
-            data-delete="${esc(k.key)}"
-          >
-            DELETE
-          </button>
-        </td>
-      </tr>
+                  <br>
 
-      <tr
-        class="detailsRow hidden"
-        data-details="${esc(k.key)}"
-      >
-        <td colspan="5">
-          <div class="details">
-            ${details}
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join("");
+                  <b>Device ID:</b>
+                  ${esc(c.device)}
+
+                  <br>
+
+                  <b>IP:</b>
+                  ${esc(c.ip || "unknown-ip")}
+
+                  <br>
+
+                  <b>Claimed:</b>
+                  ${esc(date(c.claimedAt))}
+
+                  <br>
+
+                  <b>Expired:</b>
+                  ${esc(expiry(c.expiredAt))}
+
+                </div>
+              `;
+
+            }).join("")
+
+          : `
+            <div class="muted">
+              Belum ada device.
+            </div>
+          `;
+
+      return `
+        <tr>
+
+          <td class="key">
+            ${esc(k.key)}
+          </td>
+
+          <td>
+
+            <span class="badge ${
+              k.status === "disabled"
+                ? "off"
+                : "on"
+            }">
+
+              ${String(
+                k.status || "active"
+              ).toUpperCase()}
+
+            </span>
+
+          </td>
+
+          <td>
+            ${devices}
+          </td>
+
+          <td>
+            ${date(k.createdAt)}
+          </td>
+
+          <td>
+
+            <button
+              data-view="${esc(k.key)}">
+
+              DEVICES
+
+            </button>
+
+            <button
+              data-action="${
+                k.status === "disabled"
+                  ? "enable"
+                  : "disable"
+              }"
+              data-key="${esc(k.key)}">
+
+              ${
+                k.status === "disabled"
+                  ? "ENABLE"
+                  : "DISABLE"
+              }
+
+            </button>
+
+            <button
+              class="danger"
+              data-delete="${esc(k.key)}">
+
+              DELETE
+
+            </button>
+
+          </td>
+
+        </tr>
+
+        <tr
+          class="detailsRow hidden"
+          data-details="${esc(k.key)}">
+
+          <td colspan="5">
+
+            <div class="details">
+
+              ${details}
+
+            </div>
+
+          </td>
+
+        </tr>
+      `;
+
+    }).join("");
+
 }
 
+
+/*
+ * LOAD DATA
+ */
 
 async function load() {
 
-  panelStatus.textContent = "Loading...";
+  panelStatus.textContent =
+    "Loading...";
 
   try {
 
-    const data = await apiRequest({
-      method: "GET"
-    });
+    const data =
+      await apiRequest({
+        method: "GET"
+      });
 
-    render(data.keys || []);
+    const keys =
+      Array.isArray(data.keys)
+        ? data.keys
+        : [];
 
-    const s = data.system || {};
-    const announcement = s.announcement || {};
+    render(keys);
 
-    maintenance.checked = !!s.maintenance;
-    updateMode.checked = !!s.updateMode;
+
+    /*
+     * SYSTEM
+     */
+
+    const s =
+      data.system || {};
+
+    maintenance.checked =
+      !!s.maintenance;
+
+    updateMode.checked =
+      !!s.updateMode;
 
     maintenanceMessage.value =
       s.maintenanceMessage || "";
@@ -190,41 +364,60 @@ async function load() {
       s.downloadUrl || "";
 
 
-    // =========================
-    // ANNOUNCEMENT
-    // =========================
+    /*
+     * ANNOUNCEMENT
+     */
 
-    announcementEnabled.checked =
-      !!announcement.enabled;
+    const announcement =
+      s.announcement || {};
 
-    announcementTitle.value =
-      announcement.title || "";
+    if (announcementEnabled) {
 
-    announcementMessage.value =
-      announcement.message || "";
+      announcementEnabled.checked =
+        !!announcement.enabled;
 
-    announcementStatus.textContent =
-      announcement.enabled
-        ? "Announcement aktif."
-        : "Announcement nonaktif.";
+    }
+
+    if (announcementTitle) {
+
+      announcementTitle.value =
+        announcement.title ||
+        "PENGUMUMAN";
+
+    }
+
+    if (announcementMessage) {
+
+      announcementMessage.value =
+        announcement.message ||
+        "";
+
+    }
 
 
     panelStatus.textContent =
-      `${(data.keys || []).length} key.`;
+      `${keys.length} key.`;
 
   } catch (e) {
 
-    panelStatus.textContent = e.message;
+    panelStatus.textContent =
+      e.message;
 
   }
+
 }
 
+
+/*
+ * LOGIN
+ */
 
 loginBtn.onclick = async () => {
 
   loginBtn.disabled = true;
 
-  loginStatus.textContent = "Logging in...";
+  loginStatus.textContent =
+    "Logging in...";
 
   try {
 
@@ -240,22 +433,38 @@ loginBtn.onclick = async () => {
       e.code || e.message;
 
     loginBtn.disabled = false;
+
   }
+
 };
 
 
-logoutBtn.onclick = () => signOut(auth);
+/*
+ * LOGOUT
+ */
 
+logoutBtn.onclick = () =>
+  signOut(auth);
+
+
+/*
+ * SAVE KEY
+ */
 
 saveKeyBtn.onclick = async () => {
 
   const key =
-    keyInput.value.trim().toUpperCase();
+    keyInput.value
+      .trim()
+      .toUpperCase();
 
   if (!key) {
+
     keyStatus.textContent =
       "Isi key dulu.";
+
     return;
+
   }
 
   saveKeyBtn.disabled = true;
@@ -263,16 +472,23 @@ saveKeyBtn.onclick = async () => {
   try {
 
     await apiRequest({
+
       method: "POST",
 
       body: JSON.stringify({
+
         action: "saveKey",
+
         key,
+
         maxDevices:
           Number(maxDevices.value) || 0,
+
         status:
           keyStatus.value
+
       })
+
     });
 
     keyInput.value = "";
@@ -292,12 +508,13 @@ saveKeyBtn.onclick = async () => {
     saveKeyBtn.disabled = false;
 
   }
+
 };
 
 
-// =========================
-// SAVE APP CONTROL
-// =========================
+/*
+ * SAVE SYSTEM
+ */
 
 saveSystemBtn.onclick = async () => {
 
@@ -306,9 +523,11 @@ saveSystemBtn.onclick = async () => {
   try {
 
     await apiRequest({
+
       method: "POST",
 
       body: JSON.stringify({
+
         action: "saveSystem",
 
         maintenance:
@@ -328,11 +547,15 @@ saveSystemBtn.onclick = async () => {
 
         downloadUrl:
           downloadUrl.value
+
       })
+
     });
 
     panelStatus.textContent =
       "System settings tersimpan.";
+
+    await load();
 
   } catch (e) {
 
@@ -344,56 +567,99 @@ saveSystemBtn.onclick = async () => {
     saveSystemBtn.disabled = false;
 
   }
+
 };
 
 
-// =========================
-// SAVE ANNOUNCEMENT
-// =========================
+/*
+ * SAVE ANNOUNCEMENT
+ */
 
-saveAnnouncementBtn.onclick = async () => {
+if (saveAnnouncementBtn) {
 
-  saveAnnouncementBtn.disabled = true;
+  saveAnnouncementBtn.onclick =
+    async () => {
 
-  announcementStatus.textContent =
-    "Menyimpan...";
+      saveAnnouncementBtn.disabled =
+        true;
 
-  try {
+      try {
 
-    await apiRequest({
-      method: "POST",
+        const enabled =
+          announcementEnabled
+            ? announcementEnabled.checked
+            : false;
 
-      body: JSON.stringify({
-        action: "saveAnnouncement",
+        const title =
+          announcementTitle
+            ? announcementTitle.value.trim()
+            : "PENGUMUMAN";
 
-        enabled:
-          announcementEnabled.checked,
+        const message =
+          announcementMessage
+            ? announcementMessage.value.trim()
+            : "";
 
-        title:
-          announcementTitle.value,
+        if (!title) {
 
-        message:
-          announcementMessage.value
-      })
-    });
+          throw new Error(
+            "Judul pengumuman belum diisi."
+          );
 
-    announcementStatus.textContent =
-      "Announcement berhasil disimpan.";
+        }
 
-    await load();
+        if (!message) {
 
-  } catch (e) {
+          throw new Error(
+            "Isi pengumuman belum diisi."
+          );
 
-    announcementStatus.textContent =
-      "Gagal: " + e.message;
+        }
 
-  } finally {
+        await apiRequest({
 
-    saveAnnouncementBtn.disabled = false;
+          method: "POST",
 
-  }
-};
+          body: JSON.stringify({
 
+            action:
+              "saveAnnouncement",
+
+            enabled,
+
+            title,
+
+            message
+
+          })
+
+        });
+
+        panelStatus.textContent =
+          "Announcement berhasil disimpan.";
+
+        await load();
+
+      } catch (e) {
+
+        panelStatus.textContent =
+          "Gagal: " + e.message;
+
+      } finally {
+
+        saveAnnouncementBtn.disabled =
+          false;
+
+      }
+
+    };
+
+}
+
+
+/*
+ * KEY TABLE ACTION
+ */
 
 keyTable.onclick = async e => {
 
@@ -402,20 +668,33 @@ keyTable.onclick = async e => {
 
   if (view) {
 
-    $("keyTable")
-      .querySelector(
-        `[data-details="${CSS.escape(view.dataset.view)}"]`
-      )
-      ?.classList.toggle("hidden");
+    const row =
+      $("keyTable")
+        .querySelector(
+          `[data-details="${CSS.escape(
+            view.dataset.view
+          )}"]`
+        );
+
+    if (row) {
+
+      row.classList.toggle(
+        "hidden"
+      );
+
+    }
 
     return;
+
   }
+
 
   const action =
     e.target.closest("[data-action]");
 
   const del =
     e.target.closest("[data-delete]");
+
 
   try {
 
@@ -424,24 +703,32 @@ keyTable.onclick = async e => {
       action.disabled = true;
 
       await apiRequest({
+
         method: "POST",
 
         body: JSON.stringify({
-          action: "setStatus",
+
+          action:
+            "setStatus",
 
           key:
             action.dataset.key,
 
           status:
-            action.dataset.action === "disable"
+            action.dataset.action ===
+            "disable"
               ? "disabled"
               : "active"
+
         })
+
       });
 
       await load();
 
-    } else if (
+    }
+
+    else if (
       del &&
       confirm(
         `Hapus key ${del.dataset.delete}?`
@@ -449,45 +736,77 @@ keyTable.onclick = async e => {
     ) {
 
       await apiRequest({
+
         method: "POST",
 
         body: JSON.stringify({
-          action: "deleteKey",
+
+          action:
+            "deleteKey",
 
           key:
             del.dataset.delete
+
         })
+
       });
 
       await load();
+
     }
 
   } catch (err) {
 
     panelStatus.textContent =
       err.message;
+
   }
+
 };
 
 
-refreshBtn.onclick = () => load();
+/*
+ * REFRESH
+ */
 
-
-onAuthStateChanged(auth, user => {
-
-  if (!user) {
-
-    loginCard.classList.remove("hidden");
-    panel.classList.add("hidden");
-
-    return;
-  }
-
-  loginCard.classList.add("hidden");
-  panel.classList.remove("hidden");
-
-  adminEmail.textContent =
-    user.email || "";
-
+refreshBtn.onclick = () =>
   load();
-});
+
+
+/*
+ * AUTH STATE
+ */
+
+onAuthStateChanged(
+  auth,
+  user => {
+
+    if (!user) {
+
+      loginCard.classList.remove(
+        "hidden"
+      );
+
+      panel.classList.add(
+        "hidden"
+      );
+
+      return;
+
+    }
+
+    loginCard.classList.add(
+      "hidden"
+    );
+
+    panel.classList.remove(
+      "hidden"
+    );
+
+    adminEmail.textContent =
+      user.email || "";
+
+    load();
+
+  }
+);
