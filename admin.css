@@ -453,3 +453,58 @@ tbody tr:hover{
     padding:8px 11px;
   }
 }
+
+
+/* ANNOUNCEMENT */
+
+.announcementTitle{
+  margin-top:32px;
+}
+
+.announcementBox{
+  padding:16px;
+  border:1px solid #e5e5e7;
+  border-radius:14px;
+  background:#f8f8fa;
+}
+
+.announcementBox input:not([type="checkbox"]),
+.announcementBox textarea{
+  width:100%;
+  margin-top:10px;
+  padding:11px 13px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  outline:none;
+  background:#fff;
+  color:var(--text);
+  font:inherit;
+  resize:vertical;
+}
+
+.announcementBox input:not([type="checkbox"]):focus,
+.announcementBox textarea:focus{
+  border-color:var(--blue);
+  box-shadow:0 0 0 3px rgba(0,113,227,.12);
+}
+
+.announcementToggle{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:15px;
+  min-height:58px;
+  font-size:14px;
+}
+
+#saveAnnouncementBtn{
+  margin-top:12px;
+}
+
+@media(max-width:700px){
+
+  .announcementToggle{
+    min-height:56px;
+  }
+
+}
