@@ -39,17 +39,58 @@
   <small class="hint">Device limit bebas. Isi 0 untuk unlimited.</small>
   <p id="keyStatus" class="status"></p>
 
-  <h3>APP CONTROL</h3>
-  <div class="systemGrid">
-    <label><input id="maintenance" type="checkbox"> MAINTENANCE APP</label>
-    <label><input id="updateMode" type="checkbox"> UPDATE APP</label>
-    <input id="maintenanceMessage" placeholder="Pesan maintenance">
-    <input id="updateMessage" placeholder="Pesan update">
-    <input id="version" placeholder="Versi, contoh: 2.1">
-    <input id="downloadUrl" placeholder="Link update APK (opsional)">
-  </div>
-  <button id="saveSystemBtn">SAVE APP CONTROL</button>
-  <p id="panelStatus" class="status"></p>
+<h3>APP CONTROL</h3>
+
+<div class="systemGrid">
+  <label>
+    <input id="maintenance" type="checkbox">
+    MAINTENANCE APP
+  </label>
+
+  <label>
+    <input id="updateMode" type="checkbox">
+    UPDATE APP
+  </label>
+
+  <input id="maintenanceMessage" placeholder="Pesan maintenance">
+  <input id="updateMessage" placeholder="Pesan update">
+  <input id="version" placeholder="Versi, contoh: 2.1">
+  <input id="downloadUrl" placeholder="Link update APK (opsional)">
+</div>
+
+<button id="saveSystemBtn">SAVE APP CONTROL</button>
+
+<h3 class="announcementTitle">ANNOUNCEMENT</h3>
+
+<div class="announcementBox">
+
+  <label class="announcementToggle">
+    <span>AKTIFKAN PENGUMUMAN</span>
+    <input id="announcementEnabled" type="checkbox">
+  </label>
+
+  <input
+    id="announcementTitle"
+    placeholder="Judul pengumuman"
+    maxlength="100"
+  >
+
+  <textarea
+    id="announcementMessage"
+    placeholder="Isi pengumuman..."
+    maxlength="1000"
+    rows="5"
+  ></textarea>
+
+  <button id="saveAnnouncementBtn">
+    SAVE ANNOUNCEMENT
+  </button>
+
+  <p id="announcementStatus" class="status"></p>
+
+</div>
+
+<p id="panelStatus" class="status"></p>
 
   <div class="sectionTitle"><h3>KEY LIST</h3><button id="refreshBtn" class="smallBtn">REFRESH</button></div>
   <div class="tableWrap">
