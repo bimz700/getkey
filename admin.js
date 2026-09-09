@@ -1,7 +1,4 @@
-import {
-  initializeApp
-} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 import {
   getAuth,
   signInWithEmailAndPassword,
@@ -39,12 +36,17 @@ const maintenanceMessage = $("maintenanceMessage");
 const updateMessage = $("updateMessage");
 const version = $("version");
 const downloadUrl = $("downloadUrl");
-
 const saveSystemBtn = $("saveSystemBtn");
 const panelStatus = $("panelStatus");
 
-async function apiRequest(options = {}) {
+const announcementEnabled = $("announcementEnabled");
+const announcementTitle = $("announcementTitle");
+const announcementMessage = $("announcementMessage");
+const saveAnnouncementBtn = $("saveAnnouncementBtn");
+const announcementStatus = $("announcementStatus");
 
+
+async function apiRequest(options = {}) {
   if (!auth.currentUser) {
     throw new Error("NOT_AUTHENTICATED");
   }
@@ -53,32 +55,26 @@ async function apiRequest(options = {}) {
 
   const response = await fetch("/api/admin", {
     ...options,
-
     headers: {
       "Content-Type": "application/json",
-
       Authorization: `Bearer ${token}`,
-
       ...(options.headers || {})
     },
-
     cache: "no-store"
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(
-      data.message || `HTTP ${response.status}`
-    );
+    throw new Error(data.message || `HTTP ${response.status}`);
   }
 
   return data;
 }
 
-function esc(value) {
 
-  return String(value ?? "")
+function esc(v) {
+  return String(v ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -86,32 +82,16 @@ function esc(value) {
     .replaceAll("'", "&#039;");
 }
 
+
 function date(ms) {
-
-  if (!ms) {
-    return "-";
-  }
-
-  return new Date(ms).toLocaleString("id-ID");
+  return ms ? new Date(ms).toLocaleString("id-ID") : "-";
 }
 
-function expiry(ms) {
-
-  if (!ms || Number(ms) <= 0) {
-    return "UNLIMITED";
-  }
-
-  return date(ms);
-}
 
 function render(keys) {
-
   keyTable.innerHTML = keys.map(k => {
 
-    const claims = Array.isArray(k.claims)
-      ? k.claims
-      : [];
-
+    const claims = k.claims || [];
     const max = Number(k.maxDevices || 0);
 
     const devices =
@@ -120,139 +100,68 @@ function render(keys) {
         : `${claims.length}/∞`;
 
     const details = claims.length
-
-      ? claims.map((c, index) => {
-
-          const deviceNumber =
-            c.deviceIndex > 0
-              ? c.deviceIndex
-              : index + 1;
-
-          return `
-            <div class="claim">
-
-              <b>DEVICE:</b>
-              ${deviceNumber}${max > 0 ? "/" + max : ""}
-
-              <br>
-
-              <b>Device ID:</b>
-              ${esc(c.device)}
-
-              <br>
-
-              <b>IP:</b>
-              ${esc(c.ip || "unknown-ip")}
-
-              <br>
-
-              <b>Claimed:</b>
-              ${esc(date(c.claimedAt))}
-
-              <br>
-
-              <b>Expired:</b>
-              ${esc(expiry(c.expiredAt))}
-
-            </div>
-          `;
-
-        }).join("")
-
-      : `
-        <div class="muted">
-          Belum ada device.
-        </div>
-      `;
+      ? claims.map(c => `
+          <div class="claim">
+            <b>Device:</b> ${esc(c.device)}<br>
+            <b>IP:</b> ${esc(c.ip)}<br>
+            <b>Time:</b> ${esc(date(c.claimedAt))}
+          </div>
+        `).join("")
+      : `<div class="muted">Belum ada device.</div>`;
 
     return `
       <tr>
-
-        <td class="key">
-          ${esc(k.key)}
-        </td>
+        <td class="key">${esc(k.key)}</td>
 
         <td>
-
-          <span class="badge ${
-            k.status === "disabled"
-              ? "off"
-              : "on"
-          }">
-
-            ${String(k.status || "active").toUpperCase()}
-
+          <span class="badge ${k.status === "disabled" ? "off" : "on"}">
+            ${k.status.toUpperCase()}
           </span>
-
         </td>
 
-        <td>
-          ${devices}
-        </td>
+        <td>${devices}</td>
+
+        <td>${date(k.createdAt)}</td>
 
         <td>
-          ${date(k.createdAt)}
-        </td>
-
-        <td>
-
-          <button
-            data-view="${esc(k.key)}">
+          <button data-view="${esc(k.key)}">
             DEVICES
           </button>
 
           <button
-            data-action="${
-              k.status === "disabled"
-                ? "enable"
-                : "disable"
-            }"
-            data-key="${esc(k.key)}">
-
-            ${
-              k.status === "disabled"
-                ? "ENABLE"
-                : "DISABLE"
-            }
-
+            data-action="${k.status === "disabled" ? "enable" : "disable"}"
+            data-key="${esc(k.key)}"
+          >
+            ${k.status === "disabled" ? "ENABLE" : "DISABLE"}
           </button>
 
           <button
             class="danger"
-            data-delete="${esc(k.key)}">
-
+            data-delete="${esc(k.key)}"
+          >
             DELETE
-
           </button>
-
         </td>
-
       </tr>
 
       <tr
         class="detailsRow hidden"
-        data-details="${esc(k.key)}">
-
+        data-details="${esc(k.key)}"
+      >
         <td colspan="5">
-
           <div class="details">
-
             ${details}
-
           </div>
-
         </td>
-
       </tr>
     `;
-
   }).join("");
 }
 
+
 async function load() {
 
-  panelStatus.textContent =
-    "Loading...";
+  panelStatus.textContent = "Loading...";
 
   try {
 
@@ -260,21 +169,13 @@ async function load() {
       method: "GET"
     });
 
-    const keys =
-      Array.isArray(data.keys)
-        ? data.keys
-        : [];
+    render(data.keys || []);
 
-    render(keys);
+    const s = data.system || {};
+    const announcement = s.announcement || {};
 
-    const s =
-      data.system || {};
-
-    maintenance.checked =
-      !!s.maintenance;
-
-    updateMode.checked =
-      !!s.updateMode;
+    maintenance.checked = !!s.maintenance;
+    updateMode.checked = !!s.updateMode;
 
     maintenanceMessage.value =
       s.maintenanceMessage || "";
@@ -288,23 +189,42 @@ async function load() {
     downloadUrl.value =
       s.downloadUrl || "";
 
+
+    // =========================
+    // ANNOUNCEMENT
+    // =========================
+
+    announcementEnabled.checked =
+      !!announcement.enabled;
+
+    announcementTitle.value =
+      announcement.title || "";
+
+    announcementMessage.value =
+      announcement.message || "";
+
+    announcementStatus.textContent =
+      announcement.enabled
+        ? "Announcement aktif."
+        : "Announcement nonaktif.";
+
+
     panelStatus.textContent =
-      `${keys.length} key.`;
+      `${(data.keys || []).length} key.`;
 
   } catch (e) {
 
-    panelStatus.textContent =
-      e.message;
+    panelStatus.textContent = e.message;
 
   }
 }
+
 
 loginBtn.onclick = async () => {
 
   loginBtn.disabled = true;
 
-  loginStatus.textContent =
-    "Logging in...";
+  loginStatus.textContent = "Logging in...";
 
   try {
 
@@ -320,25 +240,21 @@ loginBtn.onclick = async () => {
       e.code || e.message;
 
     loginBtn.disabled = false;
-
   }
 };
 
-logoutBtn.onclick = () =>
-  signOut(auth);
+
+logoutBtn.onclick = () => signOut(auth);
+
 
 saveKeyBtn.onclick = async () => {
 
   const key =
-    keyInput.value
-      .trim()
-      .toUpperCase();
+    keyInput.value.trim().toUpperCase();
 
   if (!key) {
-
     keyStatus.textContent =
       "Isi key dulu.";
-
     return;
   }
 
@@ -347,23 +263,16 @@ saveKeyBtn.onclick = async () => {
   try {
 
     await apiRequest({
-
       method: "POST",
 
       body: JSON.stringify({
-
         action: "saveKey",
-
         key,
-
         maxDevices:
           Number(maxDevices.value) || 0,
-
         status:
           keyStatus.value
-
       })
-
     });
 
     keyInput.value = "";
@@ -385,6 +294,11 @@ saveKeyBtn.onclick = async () => {
   }
 };
 
+
+// =========================
+// SAVE APP CONTROL
+// =========================
+
 saveSystemBtn.onclick = async () => {
 
   saveSystemBtn.disabled = true;
@@ -392,11 +306,9 @@ saveSystemBtn.onclick = async () => {
   try {
 
     await apiRequest({
-
       method: "POST",
 
       body: JSON.stringify({
-
         action: "saveSystem",
 
         maintenance:
@@ -416,9 +328,7 @@ saveSystemBtn.onclick = async () => {
 
         downloadUrl:
           downloadUrl.value
-
       })
-
     });
 
     panelStatus.textContent =
@@ -436,6 +346,55 @@ saveSystemBtn.onclick = async () => {
   }
 };
 
+
+// =========================
+// SAVE ANNOUNCEMENT
+// =========================
+
+saveAnnouncementBtn.onclick = async () => {
+
+  saveAnnouncementBtn.disabled = true;
+
+  announcementStatus.textContent =
+    "Menyimpan...";
+
+  try {
+
+    await apiRequest({
+      method: "POST",
+
+      body: JSON.stringify({
+        action: "saveAnnouncement",
+
+        enabled:
+          announcementEnabled.checked,
+
+        title:
+          announcementTitle.value,
+
+        message:
+          announcementMessage.value
+      })
+    });
+
+    announcementStatus.textContent =
+      "Announcement berhasil disimpan.";
+
+    await load();
+
+  } catch (e) {
+
+    announcementStatus.textContent =
+      "Gagal: " + e.message;
+
+  } finally {
+
+    saveAnnouncementBtn.disabled = false;
+
+  }
+};
+
+
 keyTable.onclick = async e => {
 
   const view =
@@ -443,15 +402,11 @@ keyTable.onclick = async e => {
 
   if (view) {
 
-    const row =
-      $("keyTable")
-        .querySelector(
-          `[data-details="${CSS.escape(view.dataset.view)}"]`
-        );
-
-    if (row) {
-      row.classList.toggle("hidden");
-    }
+    $("keyTable")
+      .querySelector(
+        `[data-details="${CSS.escape(view.dataset.view)}"]`
+      )
+      ?.classList.toggle("hidden");
 
     return;
   }
@@ -469,22 +424,19 @@ keyTable.onclick = async e => {
       action.disabled = true;
 
       await apiRequest({
-
         method: "POST",
 
         body: JSON.stringify({
-
           action: "setStatus",
 
-          key: action.dataset.key,
+          key:
+            action.dataset.key,
 
           status:
             action.dataset.action === "disable"
               ? "disabled"
               : "active"
-
         })
-
       });
 
       await load();
@@ -497,17 +449,14 @@ keyTable.onclick = async e => {
     ) {
 
       await apiRequest({
-
         method: "POST",
 
         body: JSON.stringify({
-
           action: "deleteKey",
 
-          key: del.dataset.delete
-
+          key:
+            del.dataset.delete
         })
-
       });
 
       await load();
@@ -520,37 +469,25 @@ keyTable.onclick = async e => {
   }
 };
 
-refreshBtn.onclick = () =>
-  load();
 
-onAuthStateChanged(
-  auth,
-  user => {
+refreshBtn.onclick = () => load();
 
-    if (!user) {
 
-      loginCard.classList.remove(
-        "hidden"
-      );
+onAuthStateChanged(auth, user => {
 
-      panel.classList.add(
-        "hidden"
-      );
+  if (!user) {
 
-      return;
-    }
+    loginCard.classList.remove("hidden");
+    panel.classList.add("hidden");
 
-    loginCard.classList.add(
-      "hidden"
-    );
-
-    panel.classList.remove(
-      "hidden"
-    );
-
-    adminEmail.textContent =
-      user.email || "";
-
-    load();
+    return;
   }
-);
+
+  loginCard.classList.add("hidden");
+  panel.classList.remove("hidden");
+
+  adminEmail.textContent =
+    user.email || "";
+
+  load();
+});
