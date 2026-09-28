@@ -54,9 +54,8 @@ export default async function handler(req, res) {
         const status = statusOf(record, now);
         if (status === "ACTIVE") return res.status(200).json(payload(previousKey, record, true, device.hash));
         if (status === "REVOKED" || status === "DISABLED") {
-          const code = status === "REVOKED" ? "KEY_REVOKED" : "KEY_DISABLED";
-          await audit("device_rejected", { key: previousKey, device: device.hash, ip, code });
-          return fail(res, code, status === "REVOKED" ? "Key untuk perangkat ini telah dicabut oleh admin." : "Key untuk perangkat ini sedang dinonaktifkan oleh admin.");
+          await audit("device_rejected", { key: previousKey, device: device.hash, ip, code: "KEY_REVOKED" });
+          return fail(res, "KEY_REVOKED", "Key untuk device ini telah dicabut oleh admin.");
         }
         if (!isPost) return res.status(200).json({ success: true, hasKey: true, key: previousKey, existing: true, device: device.hash.slice(0, 8).toUpperCase(), ...describe(record, now) });
         // EXPIRED + POST -> lanjut membuat key baru
@@ -85,9 +84,9 @@ export default async function handler(req, res) {
         durationMs: DEFAULT_DURATION_MS,
         expiresAt: now + DEFAULT_DURATION_MS,
         maxDevices: DEFAULT_MAX_DEVICES,
-        createdBy: "device"
-        // claims sengaja kosong: slot device dipakai oleh perangkat PERTAMA yang memverifikasi key
-        // di aplikasi Android (ANDROID_ID), bukan oleh browser yang meminta key.
+        createdBy: "device",
+        claims: { [device.hash]: { device: device.hash, ip, claimedAt: now, deviceIndex: 1 } },
+        lastClaimAt: now
       };
       if (await createIfAbsent("licenses", candidate, draft)) {
         key = candidate;
@@ -113,6 +112,8 @@ export default async function handler(req, res) {
     }
 
     await audit("key_created", { key, actor: "device", device: device.hash, ip, meta: { source: "generated" } });
+    await audit("key_claimed", { key, device: device.hash, ip });
+    await audit("device_bound", { key, device: device.hash, ip, meta: { used: 1, max: DEFAULT_MAX_DEVICES } });
     return res.status(200).json(payload(key, record, false, device.hash));
   } catch (error) {
     console.error("GENERATE KEY ERROR", error);
