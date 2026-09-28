@@ -508,3 +508,12 @@ tbody tr:hover{
   }
 
 }
+
+/* GENERATE KEY + STATUS TAMBAHAN */
+.generate.genKey{grid-template-columns:minmax(0,1.4fr) 130px 120px 100px auto}
+.generate.genKey .hidden{display:none!important}
+.badge.exp{background:#fff8e6;border-color:#f3dc9b;color:#a15c00}
+.badge.src{min-width:0;margin-left:6px;font-size:10px;color:var(--muted)}
+.hint a{color:var(--blue)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+@media (max-width:760px){.generate.genKey{grid-template-columns:1fr}}
