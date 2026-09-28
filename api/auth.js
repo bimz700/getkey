@@ -9,7 +9,14 @@ export async function requireAdmin(req) {
   }
 
   const token = header.slice(7).trim();
-  const decoded = await adminAuth.verifyIdToken(token);
+  let decoded;
+  try {
+    decoded = await adminAuth.verifyIdToken(token);
+  } catch {
+    const error = new Error("UNAUTHORIZED");
+    error.status = 401;
+    throw error;
+  }
   const allowedEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
 
   if (!allowedEmail || decoded.email?.trim().toLowerCase() !== allowedEmail) {
