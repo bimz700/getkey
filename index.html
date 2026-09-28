@@ -39,6 +39,23 @@
   <small class="hint">Device limit bebas. Isi 0 untuk unlimited.</small>
   <p id="keyStatus" class="status"></p>
 
+<h3>GENERATE KEY</h3>
+<div class="generate genKey">
+<select id="genDuration">
+<option value="1">1 HARI (default)</option>
+<option value="3">3 HARI</option>
+<option value="7">7 HARI</option>
+<option value="30">30 HARI</option>
+<option value="custom">CUSTOM</option>
+</select>
+<input id="genCustomDays" class="hidden" type="number" min="1" max="3650" placeholder="Hari (custom)">
+<input id="genMaxDevices" type="number" min="1" max="100000" value="1" placeholder="Max device">
+<input id="genCount" type="number" min="1" max="20" value="1" placeholder="Jumlah">
+<button id="genBtn">GENERATE</button>
+</div>
+<small class="hint">Format BIMZ-XXXX-XXXX-XXXX. Default 1 hari, 1 device. Halaman publik: <a href="/get-key" target="_blank" rel="noopener">/get-key</a></small>
+<p id="genStatus" class="status"></p>
+
 <h3>APP CONTROL</h3>
 
 <div class="systemGrid">
@@ -95,8 +112,16 @@
   <div class="sectionTitle"><h3>KEY LIST</h3><button id="refreshBtn" class="smallBtn">REFRESH</button></div>
   <div class="tableWrap">
     <table>
-      <thead><tr><th>KEY</th><th>STATUS</th><th>DEVICES</th><th>CREATED</th><th>ACTION</th></tr></thead>
+      <thead><tr><th>KEY</th><th>STATUS</th><th>DEVICES</th><th>EXPIRES</th><th>CREATED</th><th>ACTION</th></tr></thead>
       <tbody id="keyTable"></tbody>
+    </table>
+  </div>
+
+  <div class="sectionTitle"><h3>AUDIT LOG</h3><button id="refreshAuditBtn" class="smallBtn">REFRESH</button></div>
+  <div class="tableWrap">
+    <table>
+      <thead><tr><th>WAKTU</th><th>EVENT</th><th>KEY</th><th>DEVICE</th><th>DETAIL</th></tr></thead>
+      <tbody id="auditTable"></tbody>
     </table>
   </div>
 </section>
