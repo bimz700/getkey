@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { db } from "../firebase.js";
-import { DAY_MS } from "./util.js";
 
 /*
  * Penyimpanan key:
@@ -21,12 +20,11 @@ export function generateKey() {
   return `BIMZ-${part()}-${part()}-${part()}`;
 }
 
-/* ACTIVE | EXPIRED | REVOKED | DISABLED  (status lama seperti "disabled"/"DISABLED" tetap dikenali) */
+/* ACTIVE | EXPIRED | REVOKED | DISABLED */
 export function statusOf(record, now = Date.now()) {
   if (!record || typeof record !== "object") return "INVALID";
-  const raw = String(record.status || "").trim().toLowerCase();
-  if (raw === "revoked" || Number(record.revokedAt || 0) > 0) return "REVOKED";
-  if (raw === "disabled") return "DISABLED";
+  if (record.status === "revoked" || Number(record.revokedAt || 0) > 0) return "REVOKED";
+  if (record.status === "disabled") return "DISABLED";
   const expiresAt = Number(record.expiresAt || 0);
   if (expiresAt > 0 && now >= expiresAt) return "EXPIRED";
   return "ACTIVE";
@@ -56,24 +54,14 @@ export async function findKey(key) {
   return null;
 }
 
-const SAFE_RAW_ID = /^[A-Za-z0-9_-]{8,64}$/;
-
 /*
  * Validasi + device binding dalam SATU transaction (atomic), sehingga dua
  * request bersamaan tidak bisa melewati batas maxDevices.
- *
- * Kompatibilitas key lama: aplikasi Android versi lama menyimpan claim dengan
- * ANDROID_ID mentah sebagai child key (claims/{androidId}) dan expiry per-device
- * di claim.expiredAt (dari field key.durationDays). Claim seperti itu tetap
- * dikenali (lewat rawDevice) dan tidak memakai slot baru.
- *
- * Mengembalikan { code } saat ditolak, atau
- * { code:null, bound, used, max, deviceIndex, expiresAt, val }.
+ * Mengembalikan { code } saat ditolak, atau { code: null, bound, used, max, val }.
  */
-export async function verifyAndBind(node, key, deviceHash, ip, now = Date.now(), rawDevice = "") {
+export async function verifyAndBind(node, key, deviceHash, ip, now = Date.now()) {
   const ref = db.ref(`${node}/${key}`);
   await ref.get(); // isi cache lokal agar pass pertama transaction membaca data asli
-  const legacyId = SAFE_RAW_ID.test(rawDevice) ? rawDevice : null;
 
   let verdict = { code: "SERVER_ERROR" };
   const result = await ref.transaction(
@@ -83,43 +71,35 @@ export async function verifyAndBind(node, key, deviceHash, ip, now = Date.now(),
         return null;
       }
       const status = statusOf(current, now);
-      if (status === "REVOKED") { verdict = { code: "KEY_REVOKED" }; return; }
-      if (status === "DISABLED") { verdict = { code: "KEY_DISABLED" }; return; }
-      if (status === "EXPIRED") { verdict = { code: "KEY_EXPIRED" }; return; }
-
-      const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
+      if (status === "REVOKED" || status === "DISABLED") {
+        verdict = { code: "KEY_REVOKED" };
+        return;
+      }
+      if (status === "EXPIRED") {
+        verdict = { code: "KEY_EXPIRED" };
+        return;
+      }
       const claims = current.claims && typeof current.claims === "object" ? current.claims : {};
-      const ids = Object.keys(claims);
-      const used = ids.length;
+      const used = Object.keys(claims).length;
       const max = Number(current.maxDevices || 0);
-      const keyExpiry = Number(current.expiresAt || 0);
-      const soonest = (a, b) => (a > 0 && b > 0 ? Math.min(a, b) : Math.max(a, b));
 
-      const ownId = has(claims, deviceHash) ? deviceHash : legacyId && has(claims, legacyId) ? legacyId : null;
-      if (ownId) {
-        const claim = claims[ownId] && typeof claims[ownId] === "object" ? claims[ownId] : {};
-        const claimExpiry = Number(claim.expiredAt || 0); // expiry per-device dari sistem lama
-        if (claimExpiry > 0 && now >= claimExpiry) { verdict = { code: "KEY_EXPIRED" }; return; }
-        verdict = {
-          code: null, bound: false, used, max,
-          deviceIndex: Number(claim.deviceIndex || 0) || ids.indexOf(ownId) + 1,
-          expiresAt: soonest(keyExpiry, claimExpiry)
-        };
+      if (Object.prototype.hasOwnProperty.call(claims, deviceHash)) {
+        verdict = { code: null, bound: false, used, max };
         return current;
       }
       if (max > 0 && used >= max) {
         verdict = { code: max === 1 ? "DEVICE_NOT_ALLOWED" : "MAX_DEVICES_REACHED", used, max };
         return;
       }
-      const claim = { device: deviceHash, ip, claimedAt: now, deviceIndex: used + 1 };
-      // Key lama: durasi dihitung per device sejak claim pertama (durationDays), seperti sebelumnya.
-      const legacyDays = Number(current.durationDays || 0);
-      if (keyExpiry <= 0 && legacyDays > 0) claim.expiredAt = now + Math.round(legacyDays * DAY_MS);
-      verdict = {
-        code: null, bound: true, used: used + 1, max, deviceIndex: used + 1,
-        expiresAt: soonest(keyExpiry, Number(claim.expiredAt || 0))
+      verdict = { code: null, bound: true, used: used + 1, max };
+      return {
+        ...current,
+        claims: {
+          ...claims,
+          [deviceHash]: { device: deviceHash, ip, claimedAt: now, deviceIndex: used + 1 }
+        },
+        lastClaimAt: now
       };
-      return { ...current, claims: { ...claims, [deviceHash]: claim }, lastClaimAt: now };
     },
     undefined,
     false
