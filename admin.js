@@ -271,183 +271,52 @@ async function load() {
 ========================= */
 
 function renderKeys(keys) {
-
   if (!keyTable) {
     return;
   }
-
-  keyTable.innerHTML =
-    keys.map(key => {
-
-      const claims =
-        Array.isArray(key.claims)
-          ? key.claims
-          : [];
-
-      const maxDevicesValue =
-        Number(key.maxDevices || 0);
-
-      const deviceDisplay =
-        maxDevicesValue > 0
-          ? `${claims.length}/${maxDevicesValue}`
-          : `${claims.length}/∞`;
-
-
-      const claimDetails =
-        claims.length > 0
-
-          ? claims.map((claim, index) => {
-
-              const deviceIndex =
-                Number(claim.deviceIndex || 0) > 0
-                  ? Number(claim.deviceIndex)
-                  : index + 1;
-
-              return `
-                <div class="claim">
-
-                  <b>DEVICE:</b>
-                  ${deviceIndex}${
-                    maxDevicesValue > 0
-                      ? "/" + maxDevicesValue
-                      : ""
-                  }
-
-                  <br>
-
-                  <b>Device:</b>
-                  ${esc(claim.device)}
-
-                  <br>
-
-                  <b>IP:</b>
-                  ${esc(
-                    claim.ip ||
-                    "unknown-ip"
-                  )}
-
-                  <br>
-
-                  <b>Claimed:</b>
-                  ${esc(
-                    formatDate(
-                      claim.claimedAt
-                    )
-                  )}
-
-                  <br>
-
-                  <b>Expired:</b>
-                  ${esc(
-                    formatExpiry(
-                      claim.expiredAt
-                    )
-                  )}
-
-                </div>
-              `;
-
-            }).join("")
-
-          : `
-              <div class="muted">
-                Belum ada device.
-              </div>
-            `;
-
-
-      return `
-        <tr>
-
-          <td class="key">
-            ${esc(key.key)}
-          </td>
-
-          <td>
-
-            <span class="badge ${
-              key.status === "disabled"
-                ? "off"
-                : "on"
-            }">
-
-              ${esc(
-                String(
-                  key.status ||
-                  "active"
-                ).toUpperCase()
-              )}
-
-            </span>
-
-          </td>
-
-          <td>
-            ${deviceDisplay}
-          </td>
-
-          <td>
-            ${formatDate(key.createdAt)}
-          </td>
-
-          <td>
-
-            <button
-              data-view="${esc(key.key)}">
-
-              DEVICES
-
-            </button>
-
-            <button
-              data-action="${
-                key.status === "disabled"
-                  ? "enable"
-                  : "disable"
-              }"
-              data-key="${esc(key.key)}">
-
-              ${
-                key.status === "disabled"
-                  ? "ENABLE"
-                  : "DISABLE"
-              }
-
-            </button>
-
-            <button
-              class="danger"
-              data-delete="${esc(key.key)}">
-
-              DELETE
-
-            </button>
-
-          </td>
-
-        </tr>
-
-
-        <tr
-          class="detailsRow hidden"
-          data-details="${esc(key.key)}">
-
-          <td colspan="5">
-
-            <div class="details">
-
-              ${claimDetails}
-
-            </div>
-
-          </td>
-
-        </tr>
-      `;
-
-    }).join("");
+  keyTable.innerHTML = keys.map(key => {
+    const claims = Array.isArray(key.claims) ? key.claims : [];
+    const max = Number(key.maxDevices || 0);
+    const deviceDisplay = `${claims.length}/${max > 0 ? max : "∞"}`;
+    const state = String(key.displayStatus || (key.status === "disabled" ? "DISABLED" : "ACTIVE")).toUpperCase();
+    const badgeClass = state === "ACTIVE" ? "on" : state === "EXPIRED" ? "exp" : "off";
+    const isDisabledLike = state === "DISABLED" || state === "REVOKED";
+    const claimDetails = claims.length > 0
+      ? claims.map((claim, index) => {
+          const deviceIndex = Number(claim.deviceIndex || 0) > 0 ? Number(claim.deviceIndex) : index + 1;
+          return `
+            <div class="claim">
+              <b>DEVICE:</b> ${deviceIndex}${max > 0 ? "/" + max : ""}<br>
+              <b>Device:</b> ${esc(claim.device)}<br>
+              <b>IP:</b> ${esc(claim.ip || "unknown-ip")}<br>
+              <b>Claimed:</b> ${esc(formatDate(claim.claimedAt))}
+            </div>`;
+        }).join("")
+      : `<div class="muted">Belum ada device.</div>`;
+    const revokedInfo = key.revokedAt
+      ? `<div class="muted">Revoked ${esc(formatDate(key.revokedAt))} oleh ${esc(key.revokedBy || "-")}</div>`
+      : "";
+    const k = esc(key.key);
+    return `
+      <tr>
+        <td class="key">${k}<span class="badge src">${esc(String(key.source || "legacy").toUpperCase())}</span></td>
+        <td><span class="badge ${badgeClass}">${esc(state)}</span></td>
+        <td>${deviceDisplay}</td>
+        <td>${esc(formatExpiry(key.expiresAt))}</td>
+        <td>${esc(formatDate(key.createdAt))}</td>
+        <td>
+          <button data-view="${k}">DEVICES</button>
+          <button data-action="${isDisabledLike ? "enable" : "disable"}" data-key="${k}">${isDisabledLike ? "ENABLE" : "DISABLE"}</button>
+          ${state === "REVOKED" ? "" : `<button data-revoke="${k}">REVOKE</button>`}
+          ${Number(key.expiresAt) > 0 ? `<button data-extend="${k}">EXTEND</button>` : ""}
+          <button class="danger" data-delete="${k}">DELETE</button>
+        </td>
+      </tr>
+      <tr class="detailsRow hidden" data-details="${k}">
+        <td colspan="6"><div class="details">${claimDetails}${revokedInfo}</div></td>
+      </tr>`;
+  }).join("");
 }
-
 
 /* =========================
    LOGIN
@@ -936,3 +805,118 @@ onAuthStateChanged(
 
   }
 );
+
+
+/* =========================
+   GENERATE KEY / REVOKE / EXTEND
+========================= */
+const genDuration = document.getElementById("genDuration");
+const genCustomDays = document.getElementById("genCustomDays");
+const genMaxDevices = document.getElementById("genMaxDevices");
+const genCount = document.getElementById("genCount");
+const genBtn = document.getElementById("genBtn");
+const genStatus = document.getElementById("genStatus");
+
+if (genDuration) {
+  genDuration.onchange = () => {
+    genCustomDays.classList.toggle("hidden", genDuration.value !== "custom");
+  };
+}
+
+if (genBtn) {
+  genBtn.onclick = async () => {
+    const days = genDuration.value === "custom" ? Number(genCustomDays.value) : Number(genDuration.value);
+    genBtn.disabled = true;
+    genStatus.textContent = "Membuat key...";
+    try {
+      const data = await apiRequest({
+        method: "POST",
+        body: JSON.stringify({
+          action: "createKey",
+          durationDays: days,
+          maxDevices: Number(genMaxDevices.value),
+          count: Number(genCount.value)
+        })
+      });
+      genStatus.textContent = "Dibuat: " + data.keys.map(item => item.key).join(", ");
+      await load();
+      await loadAudit();
+    } catch (error) {
+      genStatus.textContent = "Gagal: " + error.message;
+    } finally {
+      genBtn.disabled = false;
+    }
+  };
+}
+
+if (keyTable) {
+  keyTable.addEventListener("click", async event => {
+    const revokeButton = event.target.closest("[data-revoke]");
+    const extendButton = event.target.closest("[data-extend]");
+    try {
+      if (revokeButton) {
+        const key = revokeButton.dataset.revoke;
+        if (!confirm(`Revoke key ${key}? Key tidak akan bisa dipakai lagi.`)) return;
+        revokeButton.disabled = true;
+        await apiRequest({ method: "POST", body: JSON.stringify({ action: "revokeKey", key }) });
+        await load();
+        await loadAudit();
+      } else if (extendButton) {
+        const key = extendButton.dataset.extend;
+        const input = prompt(`Perpanjang key ${key} berapa hari?`, "1");
+        if (input === null) return;
+        const addDays = Number(input);
+        if (!(addDays > 0)) {
+          panelStatus.textContent = "Jumlah hari tidak valid.";
+          return;
+        }
+        extendButton.disabled = true;
+        await apiRequest({ method: "POST", body: JSON.stringify({ action: "extendKey", key, addDays }) });
+        await load();
+        await loadAudit();
+      }
+    } catch (error) {
+      panelStatus.textContent = "Gagal: " + error.message;
+    }
+  });
+}
+
+/* =========================
+   AUDIT LOG
+========================= */
+const auditTable = document.getElementById("auditTable");
+const refreshAuditBtn = document.getElementById("refreshAuditBtn");
+
+async function loadAudit() {
+  if (!auditTable) return;
+  try {
+    const data = await apiRequest({
+      method: "POST",
+      body: JSON.stringify({ action: "listAudit", limit: 100 })
+    });
+    const logs = Array.isArray(data.logs) ? data.logs : [];
+    auditTable.innerHTML = logs.length
+      ? logs.map(log => {
+          const extra = [log.code, log.reason, log.actor, log.ip, log.meta ? JSON.stringify(log.meta) : ""]
+            .filter(Boolean).join(" · ");
+          return `<tr>
+            <td>${esc(formatDate(log.at))}</td>
+            <td>${esc(log.type)}</td>
+            <td class="mono">${esc(log.key || log.attempt || "-")}</td>
+            <td class="mono">${esc(log.device || "-")}</td>
+            <td>${esc(extra || "-")}</td>
+          </tr>`;
+        }).join("")
+      : `<tr><td colspan="5" class="muted">Belum ada log.</td></tr>`;
+  } catch (error) {
+    auditTable.innerHTML = `<tr><td colspan="5" class="muted">Gagal memuat log: ${esc(error.message)}</td></tr>`;
+  }
+}
+
+if (refreshAuditBtn) {
+  refreshAuditBtn.onclick = () => loadAudit();
+}
+
+onAuthStateChanged(auth, user => {
+  if (user) loadAudit();
+});
