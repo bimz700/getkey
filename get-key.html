@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>MZMODZ — Get Key</title>
+<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="get-key.css">
+</head>
+<body>
+<main class="wrap gk-wrap">
+  <section class="card gk-card" aria-live="polite">
+    <div class="brand">MZ<span>MODZ</span></div>
+    <p class="subtitle">GET KEY</p>
+    <p class="gk-lead">Generate your access key</p>
+
+    <button id="getKeyBtn" class="gk-primary" type="button">
+      <span id="btnSpinner" class="gk-spinner hidden" aria-hidden="true"></span>
+      <span id="btnLabel">GET KEY</span>
+    </button>
+
+    <div id="notice" class="gk-notice hidden" role="status"></div>
+
+    <div id="result" class="gk-result hidden">
+      <div class="gk-label">Your Key</div>
+      <div class="gk-keyrow">
+        <code id="keyValue" class="gk-key">—</code>
+        <button id="copyBtn" class="smallBtn" type="button">COPY</button>
+      </div>
+
+      <dl class="gk-meta">
+        <div><dt>Status</dt><dd><span id="statusBadge" class="badge">—</span></dd></div>
+        <div><dt>Expires</dt><dd id="expiresAt">—</dd></div>
+        <div><dt>Time left</dt><dd id="timeLeft">—</dd></div>
+        <div><dt>Devices</dt><dd id="devices">—</dd></div>
+        <div><dt>This device</dt><dd id="deviceRef" class="gk-mono">—</dd></div>
+      </dl>
+    </div>
+
+    <p class="gk-foot">Key hanya berlaku untuk device yang meminta dan tidak dapat dipindahkan.</p>
+  </section>
+</main>
+<script src="get-key.js"></script>
+</body>
+</html>
