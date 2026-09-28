@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "keys": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["status", "createdAt"]
+    }
+  }
+}
