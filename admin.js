@@ -309,7 +309,6 @@ function renderKeys(keys) {
           <button data-action="${isDisabledLike ? "enable" : "disable"}" data-key="${k}">${isDisabledLike ? "ENABLE" : "DISABLE"}</button>
           ${state === "REVOKED" ? "" : `<button data-revoke="${k}">REVOKE</button>`}
           ${Number(key.expiresAt) > 0 ? `<button data-extend="${k}">EXTEND</button>` : ""}
-          <button data-edit="${k}" data-days="${Math.round(Number(key.durationMs || 0) / 864e5 * 100) / 100 || Number(key.durationDays || 0)}" data-max="${max}">EDIT</button>
           <button class="danger" data-delete="${k}">DELETE</button>
         </td>
       </tr>
@@ -854,25 +853,7 @@ if (keyTable) {
   keyTable.addEventListener("click", async event => {
     const revokeButton = event.target.closest("[data-revoke]");
     const extendButton = event.target.closest("[data-extend]");
-    const editButton = event.target.closest("[data-edit]");
     try {
-      if (editButton) {
-        const key = editButton.dataset.edit;
-        const daysInput = prompt(`Masa aktif key ${key} (hari, dihitung sejak key dibuat). Kosongkan jika tidak diubah:`, editButton.dataset.days || "");
-        if (daysInput === null) return;
-        const maxInput = prompt(`Maximum device key ${key}. Kosongkan jika tidak diubah:`, editButton.dataset.max || "");
-        if (maxInput === null) return;
-        const payload = { action: "updateKey", key };
-        if (daysInput.trim() !== "") payload.durationDays = Number(daysInput);
-        if (maxInput.trim() !== "") payload.maxDevices = Number(maxInput);
-        if (payload.durationDays === undefined && payload.maxDevices === undefined) return;
-        editButton.disabled = true;
-        await apiRequest({ method: "POST", body: JSON.stringify(payload) });
-        panelStatus.textContent = "Key diperbarui.";
-        await load();
-        await loadAudit();
-        return;
-      }
       if (revokeButton) {
         const key = revokeButton.dataset.revoke;
         if (!confirm(`Revoke key ${key}? Key tidak akan bisa dipakai lagi.`)) return;
