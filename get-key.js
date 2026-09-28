@@ -12,7 +12,8 @@
   const ERR = {
     RATE_LIMITED: "Terlalu banyak permintaan. Coba lagi beberapa saat lagi.",
     DEVICE_NOT_ALLOWED: "Device tidak valid atau tidak diizinkan.",
-    KEY_REVOKED: "Key untuk device ini telah dicabut oleh admin.",
+    KEY_REVOKED: "Key untuk perangkat ini telah dicabut oleh admin.",
+    KEY_DISABLED: "Key untuk perangkat ini sedang dinonaktifkan oleh admin.",
     MAINTENANCE: "Sedang maintenance. Coba lagi nanti.",
     SERVER_ERROR: "Terjadi kesalahan server. Coba lagi."
   };
