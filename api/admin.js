@@ -47,7 +47,6 @@ async function readKeys() {
         updatedAt: Number(value.updatedAt || 0),
         expiresAt: Number(value.expiresAt || 0),
         durationMs: Number(value.durationMs || 0),
-        durationDays: Number(value.durationDays || 0),
         maxDevices: Number(value.maxDevices || 0),
         revokedAt: Number(value.revokedAt || 0),
         revokedBy: value.revokedBy || "",
@@ -181,47 +180,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, key, expiresAt });
     }
 
-    /* ---------- UPDATE (ubah masa aktif / max device) ---------- */
-    if (action === "updateKey") {
-      const key = normalizeKey(body.key);
-      const found = KEY_RE.test(key) ? await findKey(key) : null;
-      if (!found) return res.status(404).json({ success: false, error: "INVALID_KEY", message: "KEY NOT FOUND" });
-      const hasDays = body.durationDays !== undefined && body.durationDays !== "" && body.durationDays !== null;
-      const hasMax = body.maxDevices !== undefined && body.maxDevices !== "" && body.maxDevices !== null;
-      if (!hasDays && !hasMax) return res.status(400).json({ success: false, error: "BAD_REQUEST", message: "Isi durationDays dan/atau maxDevices." });
-
-      const update = { updatedAt: now };
-      const meta = {};
-      if (hasMax) {
-        const raw = Math.floor(Number(body.maxDevices));
-        const allowUnlimited = found.node === "keys"; // 0 = unlimited hanya untuk stok lama
-        if (!Number.isFinite(raw) || raw > MAX_DEVICES_LIMIT || raw < (allowUnlimited ? 0 : 1)) {
-          return res.status(400).json({ success: false, error: "BAD_REQUEST", message: `Maximum device harus ${allowUnlimited ? 0 : 1}-${MAX_DEVICES_LIMIT}.` });
-        }
-        update.maxDevices = raw;
-        meta.maxDevices = raw;
-      }
-      if (hasDays) {
-        const days = positiveDays(body.durationDays);
-        if (!days) return res.status(400).json({ success: false, error: "BAD_REQUEST", message: `Masa aktif harus 0-${MAX_DURATION_DAYS} hari.` });
-        if (found.node === "licenses") {
-          // Masa aktif baru dihitung sejak key dibuat.
-          const createdAt = Number(found.val.createdAt || now);
-          update.durationMs = Math.round(days * DAY_MS);
-          update.expiresAt = createdAt + update.durationMs;
-          meta.durationMs = update.durationMs;
-          meta.expiresAt = update.expiresAt;
-        } else {
-          // Stok lama: durasi dihitung per device saat claim, jadi hanya berlaku untuk device berikutnya.
-          update.durationDays = days;
-          meta.durationDays = days;
-        }
-      }
-      await found.ref.update(update);
-      await audit("key_updated", { key, actor, ip, meta });
-      return res.status(200).json({ success: true, key, ...meta });
-    }
-
     /* ---------- DELETE ---------- */
     if (action === "deleteKey") {
       const key = normalizeKey(body.key);
@@ -259,7 +217,6 @@ export default async function handler(req, res) {
       const downloadUrl = String(body.downloadUrl || "").slice(0, 1000);
       // update (bukan set) supaya /system/announcement tidak ikut terhapus
       await db.ref("system").update({ maintenance, updateMode, maintenanceMessage, updateMessage, version, downloadUrl, updatedAt: now });
-      await audit("admin_system_saved", { actor, ip, meta: { maintenance, updateMode, version } });
       return res.status(200).json({ success: true, message: "System settings berhasil disimpan." });
     }
 
@@ -269,7 +226,6 @@ export default async function handler(req, res) {
       const title = String(body.title || "PENGUMUMAN").trim().slice(0, 100);
       const message = String(body.message || "").trim().slice(0, 2000);
       await db.ref("system/announcement").set({ enabled, title, message, updatedAt: now });
-      await audit("admin_announcement_saved", { actor, ip, meta: { enabled } });
       return res.status(200).json({ success: true, message: "Announcement berhasil disimpan.", announcement: { enabled, title, message } });
     }
 
