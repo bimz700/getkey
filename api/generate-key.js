@@ -6,8 +6,10 @@ import { createIfAbsent, describe, generateKey, statusOf } from "./_lib/keys.js"
 
 /*
  * GET  /api/generate-key  -> status key milik device ini (tidak membuat key)
- * POST /api/generate-key  -> buat key baru (atau kembalikan key aktif milik device ini)
- * Device dikirim lewat header X-Device-Identifier.
+ * POST /api/generate-key  -> buat key baru (atau kembalikan key aktif milik browser ini)
+ * Browser diidentifikasi lewat header X-Device-Identifier (hanya untuk membatasi 1 key aktif
+ * per browser). Key BELUM terikat device: ia terikat ke device pertama yang memakainya lewat
+ * /api/verify-key (mis. aplikasi Android).
  */
 
 function payload(key, record, existing, deviceHash) {
@@ -18,6 +20,8 @@ function payload(key, record, existing, deviceHash) {
     key,
     existing,
     device: deviceHash.slice(0, 8).toUpperCase(),
+    deviceIndex: 1,
+    maxDevices: Number(record?.maxDevices || 0),
     ...describe(record)
   };
 }
@@ -54,8 +58,9 @@ export default async function handler(req, res) {
         const status = statusOf(record, now);
         if (status === "ACTIVE") return res.status(200).json(payload(previousKey, record, true, device.hash));
         if (status === "REVOKED" || status === "DISABLED") {
-          await audit("device_rejected", { key: previousKey, device: device.hash, ip, code: "KEY_REVOKED" });
-          return fail(res, "KEY_REVOKED", "Key untuk device ini telah dicabut oleh admin.");
+          const code = status === "REVOKED" ? "KEY_REVOKED" : "KEY_DISABLED";
+          await audit("device_rejected", { key: previousKey, device: device.hash, ip, code });
+          return fail(res, code, status === "REVOKED" ? "Key untuk device ini telah dicabut oleh admin." : "Key untuk device ini sedang dinonaktifkan.");
         }
         if (!isPost) return res.status(200).json({ success: true, hasKey: true, key: previousKey, existing: true, device: device.hash.slice(0, 8).toUpperCase(), ...describe(record, now) });
         // EXPIRED + POST -> lanjut membuat key baru
@@ -85,8 +90,8 @@ export default async function handler(req, res) {
         expiresAt: now + DEFAULT_DURATION_MS,
         maxDevices: DEFAULT_MAX_DEVICES,
         createdBy: "device",
-        claims: { [device.hash]: { device: device.hash, ip, claimedAt: now, deviceIndex: 1 } },
-        lastClaimAt: now
+        issuedTo: device.hash, // identitas browser peminta (batasi 1 key aktif per browser)
+        claims: {} // device baru terikat saat key dipakai pertama kali (mis. di aplikasi Android)
       };
       if (await createIfAbsent("licenses", candidate, draft)) {
         key = candidate;
@@ -112,8 +117,6 @@ export default async function handler(req, res) {
     }
 
     await audit("key_created", { key, actor: "device", device: device.hash, ip, meta: { source: "generated" } });
-    await audit("key_claimed", { key, device: device.hash, ip });
-    await audit("device_bound", { key, device: device.hash, ip, meta: { used: 1, max: DEFAULT_MAX_DEVICES } });
     return res.status(200).json(payload(key, record, false, device.hash));
   } catch (error) {
     console.error("GENERATE KEY ERROR", error);

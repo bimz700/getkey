@@ -1,5 +1,5 @@
 import { db } from "./firebase.js";
-import { cors, deviceFrom, fail, getIp } from "./_lib/util.js";
+import { DAY_MS, cors, deviceFrom, fail, getIp } from "./_lib/util.js";
 import { rateLimit } from "./_lib/ratelimit.js";
 import { audit } from "./_lib/audit.js";
 import { statusOf } from "./_lib/keys.js";
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     const id = device.hash;
     const values = keysSnap.val() || {};
     const now = Date.now();
-    const isActive = value => value?.status === "active" && statusOf(value, now) === "ACTIVE";
+    const isActive = value => String(value?.status || "").toLowerCase() === "active" && statusOf(value, now) === "ACTIVE";
 
     // Kembalikan key yang sudah pernah di-claim device ini, jika masih aktif.
     for (const [key, value] of Object.entries(values)) {
@@ -63,16 +63,15 @@ export default async function handler(req, res) {
       const claimedAt = Date.now();
       const result = await ref.transaction(current => {
         if (!current) return null; // pass pertama tanpa cache; server akan mengulang dengan data asli
-        if (current.status !== "active" || statusOf(current, claimedAt) !== "ACTIVE") return;
+        if (String(current.status || "").toLowerCase() !== "active" || statusOf(current, claimedAt) !== "ACTIVE") return;
         const claims = current.claims && typeof current.claims === "object" ? current.claims : {};
         if (Object.prototype.hasOwnProperty.call(claims, id)) return current;
         const maxDevices = Number(current.maxDevices || 0);
         if (maxDevices > 0 && Object.keys(claims).length >= maxDevices) return;
-        return {
-          ...current,
-          claims: { ...claims, [id]: { device: id, ip, claimedAt, deviceIndex: Object.keys(claims).length + 1 } },
-          lastClaimAt: claimedAt
-        };
+        const durationDays = Number(current.durationDays || 0);
+        const claim = { device: id, ip, claimedAt, deviceIndex: Object.keys(claims).length + 1 };
+        if (durationDays > 0) claim.expiredAt = claimedAt + Math.round(durationDays * DAY_MS);
+        return { ...current, claims: { ...claims, [id]: claim }, lastClaimAt: claimedAt };
       });
       const saved = result.snapshot.val();
       if (result.committed && saved?.claims && Object.prototype.hasOwnProperty.call(saved.claims, id)) {

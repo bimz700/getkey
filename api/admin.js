@@ -23,7 +23,9 @@ function normalizeClaims(claims) {
         ip: String(value.ip || "unknown-ip"),
         claimedAt: Number(value.claimedAt || 0),
         expiredAt: Number(value.expiredAt || 0),
-        deviceIndex: Number(value.deviceIndex || 0)
+        deviceIndex: Number(value.deviceIndex || 0),
+        model: String(value.model || ""),
+        model: String(value.model || "")
       };
     })
     .sort((a, b) => b.claimedAt - a.claimedAt);
@@ -47,6 +49,7 @@ async function readKeys() {
         updatedAt: Number(value.updatedAt || 0),
         expiresAt: Number(value.expiresAt || 0),
         durationMs: Number(value.durationMs || 0),
+        durationDays: Number(value.durationDays || 0),
         maxDevices: Number(value.maxDevices || 0),
         revokedAt: Number(value.revokedAt || 0),
         revokedBy: value.revokedBy || "",
@@ -101,8 +104,15 @@ export default async function handler(req, res) {
       }
       const ref = db.ref(`keys/${key}`);
       const current = (await ref.get()).val() || {};
+      const extra = {};
+      if (body.durationDays !== undefined && body.durationDays !== "") {
+        const d = Number(body.durationDays);
+        if (!Number.isFinite(d) || d < 0 || d > MAX_DURATION_DAYS) return res.status(400).json({ success: false, error: "BAD_REQUEST", message: `durationDays harus 0-${MAX_DURATION_DAYS}.` });
+        extra.durationDays = d; // masa aktif per device (semantik lama), 0 = tanpa batas
+      }
       await ref.set({
         ...current,
+        ...extra,
         status: body.status === "disabled" ? "disabled" : "active",
         maxDevices,
         createdAt: Number(current.createdAt || now),
@@ -157,7 +167,8 @@ export default async function handler(req, res) {
       const key = normalizeKey(body.key);
       const found = KEY_RE.test(key) ? await findKey(key) : null;
       if (!found) return res.status(404).json({ success: false, error: "INVALID_KEY", message: "KEY NOT FOUND" });
-      await found.ref.update({ status: "revoked", revokedAt: now, revokedBy: actor, updatedAt: now });
+      // Stok lama tetap ditandai "disabled" agar APK lama (yang hanya mengecek "disabled") ikut menolak.
+      await found.ref.update({ status: found.node === "keys" ? "disabled" : "revoked", revokedAt: now, revokedBy: actor, updatedAt: now });
       await audit("key_revoked", { key, actor, ip });
       return res.status(200).json({ success: true, key, status: "REVOKED" });
     }
@@ -186,11 +197,11 @@ export default async function handler(req, res) {
       const found = KEY_RE.test(key) ? await findKey(key) : null;
       if (!found) return res.status(404).json({ success: false, error: "INVALID_KEY", message: "KEY NOT FOUND" });
       if (found.node === "licenses") {
-        const claims = found.val.claims && typeof found.val.claims === "object" ? Object.keys(found.val.claims) : [];
-        await Promise.all(claims.map(async hash => {
-          const idx = db.ref(`deviceKeys/${hash}`);
+        const issuer = found.val.issuedTo;
+        if (issuer) {
+          const idx = db.ref(`deviceKeys/${issuer}`);
           if ((await idx.get()).val() === key) await idx.remove();
-        }));
+        }
       }
       await found.ref.remove();
       await audit("key_deleted", { key, actor, ip });
