@@ -10,7 +10,8 @@ export const MAX_DEVICES_LIMIT = 100000;
 export const ERRORS = {
   INVALID_KEY: [404, "Key tidak ditemukan atau formatnya salah."],
   KEY_EXPIRED: [403, "Key sudah kedaluwarsa."],
-  KEY_REVOKED: [403, "Key sudah dicabut atau dinonaktifkan."],
+  KEY_REVOKED: [403, "Key sudah dicabut oleh admin."],
+  KEY_DISABLED: [403, "Key sedang dinonaktifkan."],
   DEVICE_NOT_ALLOWED: [403, "Device tidak diizinkan untuk key ini."],
   MAX_DEVICES_REACHED: [403, "Batas maksimum device untuk key ini sudah tercapai."],
   RATE_LIMITED: [429, "Terlalu banyak permintaan. Coba lagi beberapa saat lagi."],
@@ -33,7 +34,7 @@ export function fail(res, code, message, extra = {}) {
   });
 }
 
-export function cors(res, headers = "Content-Type, X-Device-Identifier") {
+export function cors(res, headers = "Content-Type, X-Device-Identifier, X-Device-Model") {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", headers);
@@ -72,9 +73,17 @@ export function deviceFrom(req, body = {}) {
   const lower = raw.toLowerCase();
   if (raw.length < 8 || raw.length > 256 || BAD_DEVICE_IDS.has(lower)) return null;
   if (/^(.)\1+$/.test(raw)) return null; // mis. "00000000"
-  return { raw, hash: sha256(raw) };
+  // Nama model perangkat (opsional, hanya untuk tampilan admin); dibersihkan agar aman.
+  const model = String(req.headers["x-device-model"] || body.deviceModel || "")
+    .replace(/[^A-Za-z0-9 ._-]/g, "").trim().slice(0, 60);
+  return { raw, hash: sha256(raw), model };
 }
 
 export function shortDevice(hash) {
   return String(hash || "").slice(0, 12);
+}
+
+/* Nama/model device opsional dari klien (hanya untuk tampilan admin). */
+export function modelFrom(body = {}) {
+  return String(body.deviceName || "").replace(/[^\p{L}\p{N} ._()-]/gu, "").trim().slice(0, 60);
 }
