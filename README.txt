@@ -1,87 +1,96 @@
-MZMODZ ADMIN PANEL v5  (Get Key + Verify Key)
+MZMODZ ADMIN PANEL v6  (Get Key + Verify Key + Android API)
 
-Root URL (/)        : Firebase Email/Password admin login + panel.
-/get-key            : halaman Get Key publik (generate key per device).
-Semua fitur v4 tetap ada: stok key manual, enable/disable, delete, Maintenance,
+Root URL (/)   : Firebase Email/Password admin login + panel.
+/get-key       : halaman Get Key publik (generate key).
+Semua fitur lama tetap ada: stok key manual, enable/disable, delete, Maintenance,
 Update App, Announcement, admin authentication.
 
-==================== API ====================
-PUBLIK (header: X-Device-Identifier; wajib valid, min 8 karakter, bukan "unknown-device")
-  GET  /api/getkey               Stok key LAMA (/keys). Response tidak berubah:
-                                 { success, key, existing } | { success:false, message }
-  GET  /api/generate-key         Status key milik device ini (tidak membuat key).
-  POST /api/generate-key         Buat key baru BIMZ-XXXX-XXXX-XXXX (1 hari, 1 device),
-                                 atau kembalikan key aktif milik device ini.
-  POST /api/verify-key           Body {"key":"..."}; validasi + device binding atomic.
-                                 200: { valid:true, status:"ACTIVE", expiresAt, devices:{used,max} }
-                                 err: { valid:false, error:"KEY_EXPIRED", message }
+ALUR APLIKASI ANDROID
+  Announcement -> Maintenance -> Update (tetap membaca Firebase /system langsung)
+  -> Key Validation: POST /api/verify-key (BUKAN lagi baca /keys / tulis /claims)
+  -> MzmodzActivity.
+Kode Android pengganti: android/MainActivity_key_validation.java
 
-ADMIN (Authorization: Bearer <Firebase ID token>, email harus = ADMIN_EMAIL)
-  GET  /api/admin                Daftar key (stok + generated) dan /system.
-  POST /api/admin  action:
-     saveKey {key,maxDevices,status}      stok lama (manual)
-     createKey {durationDays,maxDevices,count}   default 1 hari, 1 device, max 20 key
-     setStatus {key,status:active|disabled}
-     revokeKey {key}   extendKey {key,addDays}   deleteKey {key}
-     listAudit {limit}
-     saveSystem {...}  saveAnnouncement {...}
+==================== API ====================
+PUBLIK (header X-Device-Identifier wajib: ANDROID_ID / id browser, min 8 karakter,
+        bukan "unknown-device"/"UNKNOWN_DEVICE"; server yang melakukan hashing)
+  POST /api/verify-key
+     Header : X-Device-Identifier, X-Device-Model (opsional, tampilan admin)
+     Body   : {"key":"BIMZ-XXXX-XXXX-XXXX"}   (key stok lama juga diterima)
+     200    : { success:true, valid:true, status:"ACTIVE", expiresAt, deviceIndex,
+                maxDevices, newlyBound, devices:{used,max} }
+              expiresAt = ms epoch (0 = tanpa batas); maxDevices 0 = unlimited.
+     error  : { success:false, valid:false, error:"<CODE>", message }
+     Device baru yang masih punya slot otomatis di-bind (atomic) saat verifikasi pertama.
+  GET  /api/generate-key    Status key milik browser ini (tidak membuat key).
+  POST /api/generate-key    Buat key BIMZ-XXXX-XXXX-XXXX (1 hari, 1 device), atau kembalikan
+                            key aktif milik browser ini. Key BELUM terikat device; terikat ke
+                            device pertama yang memakainya lewat /api/verify-key.
+  GET|POST /api/getkey      Stok key LAMA (/keys), response tidak berubah.
+
+ADMIN (Authorization: Bearer <Firebase ID token>, email = ADMIN_EMAIL)
+  GET  /api/admin           Daftar key (stok + generated) dan /system.
+  POST /api/admin  action:  saveKey | createKey{durationDays,maxDevices,count} |
+                            setStatus | revokeKey | extendKey{addDays} | deleteKey |
+                            listAudit{limit} | saveSystem | saveAnnouncement
 
 ERROR CODE
-  INVALID_KEY 404 | KEY_EXPIRED 403 | KEY_REVOKED 403 | DEVICE_NOT_ALLOWED 403
-  MAX_DEVICES_REACHED 403 | RATE_LIMITED 429 (+Retry-After) | UNAUTHORIZED 401
-  BAD_REQUEST 400 | MAINTENANCE 503 | SERVER_ERROR 500
-  Key 1-device yang sudah terikat device lain -> DEVICE_NOT_ALLOWED.
-  Key multi-device yang slotnya penuh        -> MAX_DEVICES_REACHED.
-  Key disabled (stok lama) diperlakukan sama dengan revoked.
+  INVALID_KEY 404 | KEY_EXPIRED 403 | KEY_REVOKED 403 | KEY_DISABLED 403
+  DEVICE_NOT_ALLOWED 403 | MAX_DEVICES_REACHED 403 | RATE_LIMITED 429 (+Retry-After)
+  UNAUTHORIZED 401 | BAD_REQUEST 400 | MAINTENANCE 503 | SERVER_ERROR 500
+  KEY_DISABLED  = status "disabled" (tanpa revokedAt) ; KEY_REVOKED = dicabut admin.
+  Key 1-device yang terikat device lain -> DEVICE_NOT_ALLOWED.
+  Key multi-device yang slotnya penuh   -> MAX_DEVICES_REACHED.
 
-RATE LIMIT (per IP, disimpan di RTDB /rateLimits)
-  generate POST 10/jam | generate GET 60/menit | verify 60/menit
-  getkey lama 30/menit | admin 120/menit
+RATE LIMIT (per IP, RTDB /rateLimits)
+  generate POST 10/jam | generate GET 60/menit | verify 60/menit | getkey lama 30/menit
+  admin 120/menit
 
 ==================== DATABASE (Firebase RTDB) ====================
-/keys/{KEY}        stok lama. Field lama tetap: status, maxDevices, createdAt,
-                   updatedAt, claims/{sha256(device)}. Field opsional baru:
-                   expiresAt, revokedAt, revokedBy. Key lama tanpa expiresAt = tanpa batas.
+/keys/{KEY}        stok lama, TIDAK diubah secara destruktif. Field lama: status, maxDevices,
+                   durationDays, createdAt, updatedAt, claims/{deviceId}. Opsional baru:
+                   expiresAt, revokedAt, revokedBy. Tanpa expiresAt = tanpa batas.
+                   Claim lama (kunci = ANDROID_ID mentah) tetap dikenali; claim baru
+                   memakai sha256(device). Claim lama: expiredAt hanya berlaku jika key
+                   punya durationDays > 0 (semantik aplikasi lama).
+                   Revoke stok lama menulis status "disabled" + revokedAt (APK lama ikut menolak).
 /licenses/{KEY}    key hasil generate (privat): key, status(active|disabled|revoked),
                    source(generated|admin), createdAt, updatedAt, durationMs, expiresAt,
-                   maxDevices, revokedAt, revokedBy, createdBy, extendedAt, lastClaimAt,
-                   claims/{sha256(device)}: {device, ip, claimedAt, deviceIndex}
-/deviceKeys/{sha256(device)}  -> KEY generate milik device (satu key aktif per device)
-/auditLogs/{pushId}  {type, at, key, device(12 hex pertama hash), ip, code, actor, meta}
-                   type: key_created, key_claimed, key_verified, device_bound,
-                   device_rejected, key_expired, key_extended, key_revoked, key_deleted,
-                   key_enabled, key_disabled, key_invalid
-/rateLimits/{scope}/{sha256(ip)}  {s: awal window, c: hitungan}
+                   maxDevices, issuedTo(hash browser), createdBy, revokedAt, revokedBy,
+                   extendedAt, lastClaimAt, claims/{sha256(device)}:
+                   {device, ip, claimedAt, deviceIndex, model?}
+/deviceKeys/{sha256(browser)} -> KEY generate aktif untuk browser itu
+/auditLogs/{pushId}  {type, at, key, device(12 hex hash), ip, code, actor, meta}
+/rateLimits/{scope}/{sha256(ip)}  {s, c}
 /system            maintenance, updateMode, ..., announcement (tidak berubah)
-Status key: ACTIVE | EXPIRED | REVOKED | DISABLED.
+Status: ACTIVE | EXPIRED | REVOKED | DISABLED.
 
-==================== FIREBASE RULES ====================
-database.rules.json         TRANSISI. Menutup semua akses klien KECUALI baca /keys
-                            (stok lama, agar aplikasi Android lama tidak putus). Tulis
-                            klien ke claims dihapus. /licenses, /deviceKeys, /auditLogs,
-                            /rateLimits, /system tidak bisa diakses klien.
-database.rules.strict.json  FINAL. Semua akses klien ditutup; hanya server (firebase-admin).
-Pasang lewat Firebase Console > Realtime Database > Rules. Pindah ke strict setelah
-aplikasi Android dipastikan hanya memakai /api/getkey atau /api/verify-key.
+==================== FIREBASE RULES (2 tahap) ====================
+Aplikasi Android SELALU membaca /system langsung (Announcement/Maintenance/Update),
+jadi /system harus tetap bisa dibaca klien di kedua file rules.
+
+TAHAP 1  database.rules.json  (pasang SEKARANG)
+  /system baca publik; /keys tetap baca publik + aturan tulis claims lama, supaya APK LAMA
+  yang sudah terpasang tetap jalan. APK baru tidak menyentuh /keys dan /claims.
+  Konsekuensi: selama APK lama masih beredar, celah lama (baca /keys, tulis claim langsung)
+  masih ada. Penegakan maxDevices/expiry/revoke server-side hanya berlaku penuh untuk APK baru
+  dan website.
+TAHAP 2  database.rules.strict.json  (pasang setelah APK lama tidak dipakai lagi)
+  Hanya /system yang bisa dibaca klien; semua lainnya hanya lewat server (firebase-admin).
+  APK lama akan gagal membaca key (permission denied).
+Pasang lewat Firebase Console > Realtime Database > Rules. Periksa juga rules yang AKTIF di
+console: file di repo belum tentu sama dengan yang terpasang.
 
 ==================== ENVIRONMENT VARIABLES (Vercel) ====================
-Semua secret/credential HANYA dari Vercel > Project > Settings > Environment Variables
-dan dibaca backend lewat process.env.*. Repository tidak berisi file .env / .env.example
-dan tidak berisi nilai credential apa pun.
-
-Nama variable yang dibutuhkan (semua wajib):
-  FIREBASE_PROJECT_ID
-  FIREBASE_CLIENT_EMAIL
-  FIREBASE_PRIVATE_KEY      (baris baru boleh berupa \n)
-  FIREBASE_DATABASE_URL
-  ADMIN_EMAIL               (email akun Firebase Auth yang boleh masuk admin panel)
-
-Fitur Get Key/Verify Key/rate limit/audit log TIDAK membutuhkan secret tambahan.
-Jangan pernah taruh service account di frontend/APK. firebase-config.js hanya berisi
-config web PUBLIK Firebase untuk login admin (bukan credential rahasia).
+Semua secret hanya dari Vercel > Settings > Environment Variables (process.env.*).
+Repository tidak berisi .env / .env.example / nilai credential.
+Wajib: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (baris baru boleh \n),
+       FIREBASE_DATABASE_URL, ADMIN_EMAIL.
+Tidak ada secret tambahan. firebase-config.js hanya config web PUBLIK untuk login admin.
 
 ==================== DEPLOY ====================
-1. Set kelima Environment Variables di Vercel (Production/Preview sesuai kebutuhan).
-2. Pasang database.rules.json di Firebase Console (lihat di atas).
-3. git push / vercel --prod  (tanpa build step; dependency: firebase-admin).
-4. Buka / untuk admin dan /get-key untuk halaman publik.
+1. Pastikan 5 Environment Variables terisi di Vercel.
+2. Pasang database.rules.json (tahap 1) di Firebase Console.
+3. Deploy backend (git push / vercel --prod). Tanpa build step; dependency: firebase-admin.
+4. Ganti kode key di Android sesuai android/MainActivity_key_validation.java, rilis APK baru.
+5. Setelah APK lama tidak dipakai, pasang database.rules.strict.json (tahap 2).

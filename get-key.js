@@ -6,7 +6,7 @@
   const notice = $("notice"), result = $("result"), copyBtn = $("copyBtn");
   const els = {
     key: $("keyValue"), badge: $("statusBadge"), expires: $("expiresAt"),
-    left: $("timeLeft"), devices: $("devices"), device: $("deviceRef")
+    left: $("timeLeft"), devices: $("devices")
   };
 
   const ERR = {
@@ -91,7 +91,6 @@
     els.expires.textContent = data.expiresAt > 0 ? new Date(data.expiresAt).toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" }) : "Tanpa batas";
     const d = data.devices || { used: 0, max: 0 };
     els.devices.textContent = `${d.used} / ${d.max > 0 ? d.max : "∞"}`;
-    els.device.textContent = data.device || "-";
     result.classList.remove("hidden");
     render();
     clearInterval(timer);
@@ -107,7 +106,7 @@
     try {
       const data = await api("POST");
       showKey(data);
-      show("success", data.existing ? "Key aktif untuk device ini ditemukan." : "Key berhasil dibuat.");
+      show("success", data.existing ? "Key aktif untuk browser ini ditemukan." : "Key berhasil dibuat. Masukkan di aplikasi untuk mengaktifkan.");
     } catch (error) {
       show("error", error.message);
     } finally {
@@ -140,14 +139,19 @@
     setTimeout(() => { copyBtn.textContent = "COPY"; }, 1800);
   });
 
-  /* Saat halaman dibuka: tampilkan key milik device ini jika sudah ada (tanpa membuat baru). */
-  (async () => {
-    btn.dataset.label = "GET KEY";
+  /* Muat status key milik browser ini (tanpa membuat key baru). */
+  async function refresh(initial) {
     try {
       const data = await api("GET");
       if (data.hasKey) showKey(data);
     } catch (error) {
-      if (error.code === "RATE_LIMITED" || error.code === "MAINTENANCE") show("error", error.message);
+      if (initial && (error.code === "RATE_LIMITED" || error.code === "MAINTENANCE")) show("error", error.message);
     }
-  })();
+  }
+
+  btn.dataset.label = "GET KEY";
+  refresh(true);
+  /* Perbarui jumlah device saat key dipakai di aplikasi. */
+  setInterval(() => { if (!document.hidden && current) refresh(false); }, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && current) refresh(false); });
 })();

@@ -3,9 +3,24 @@
     ".read": false,
     ".write": false,
 
+    "system": {
+      ".read": true,
+      ".write": false
+    },
+
     "keys": {
       ".read": true,
       ".write": false,
+
+      "$key": {
+        "claims": {
+          "$device": {
+            ".write": "!data.exists() && newData.hasChildren(['claimedAt', 'expiredAt'])",
+            ".validate": "newData.hasChildren(['claimedAt', 'expiredAt'])"
+          }
+        }
+      },
+
       ".indexOn": ["status", "createdAt"]
     }
   }

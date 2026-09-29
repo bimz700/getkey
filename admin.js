@@ -287,7 +287,7 @@ function renderKeys(keys) {
           return `
             <div class="claim">
               <b>DEVICE:</b> ${deviceIndex}${max > 0 ? "/" + max : ""}<br>
-              <b>Device:</b> ${esc(claim.device)}<br>
+              <b>Device:</b> ${esc(claim.device)}${claim.model ? " (" + esc(claim.model) + ")" : ""}<br>
               <b>IP:</b> ${esc(claim.ip || "unknown-ip")}<br>
               <b>Claimed:</b> ${esc(formatDate(claim.claimedAt))}
             </div>`;
