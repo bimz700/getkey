@@ -356,6 +356,69 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, uid });
     }
 
+    /* ---------- GET KEY SHORT LINKS ---------- */
+    if (["listShortLinks", "createShortLink", "deleteShortLink"].includes(action)) {
+      assertOwner(admin);
+
+      if (action === "listShortLinks") {
+        const snap = await db.ref("getKeyLinks").get();
+        const links = Object.entries(snap.val() || {}).map(([token, value]) => ({
+          token,
+          destination: String(value?.destination || ""),
+          durationMs: Number(value?.durationMs || 0),
+          expiresAt: Number(value?.expiresAt || 0),
+          usedAt: Number(value?.usedAt || 0),
+          flowId: String(value?.flowId || ""),
+          step: Number(value?.step || 1),
+          totalSteps: Number(value?.totalSteps || 1),
+          createdAt: Number(value?.createdAt || 0)
+        })).sort((a,b) => b.createdAt - a.createdAt);
+        return res.status(200).json({ success: true, links });
+      }
+
+      if (action === "deleteShortLink") {
+        const token = String(body.token || "").trim();
+        if (!/^[A-Za-z0-9_-]{4,80}$/.test(token)) return badRequest(res, "Short code tidak valid.");
+        await db.ref(`getKeyLinks/${token}`).remove();
+        await audit("shortlink_deleted", { actor, ip, meta: { token } });
+        return res.status(200).json({ success: true, token });
+      }
+
+      const destination = String(body.destination || "").trim();
+      if (!destination || !(destination.startsWith("/") || /^https?:\/\//i.test(destination))) return badRequest(res, "Destination harus URL http(s) atau path internal.");
+      const amount = Number(body.durationAmount);
+      const unit = String(body.durationUnit || "hour").toLowerCase();
+      const unitMs = unit === "minute" ? 60000 : unit === "day" ? 86400000 : 3600000;
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 3650) return badRequest(res, "Durasi tidak valid.");
+      const durationMs = Math.round(amount * unitMs);
+      let token = String(body.token || "").trim();
+      if (token && !/^[A-Za-z0-9_-]{4,80}$/.test(token)) return badRequest(res, "Short code tidak valid.");
+      for (let attempt = 0; !token || attempt < 5; attempt += 1) {
+        if (!token) token = randomBytes(6).toString("base64url");
+        const exists = await db.ref(`getKeyLinks/${token}`).get();
+        if (!exists.exists()) break;
+        if (body.token) return res.status(409).json({ success: false, error: "BAD_REQUEST", message: "Short code sudah digunakan." });
+        token = "";
+      }
+      if (!token) return fail(res, "SERVER_ERROR");
+      const record = {
+        token,
+        destination,
+        durationMs,
+        expiresAt: now + durationMs,
+        usedAt: 0,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: admin.uid,
+        flowId: String(body.flowId || ""),
+        step: Math.max(1, Math.floor(Number(body.step) || 1)),
+        totalSteps: Math.max(1, Math.floor(Number(body.totalSteps) || 1))
+      };
+      await db.ref(`getKeyLinks/${token}`).set(record);
+      await audit("shortlink_created", { actor, ip, meta: { token, durationMs, flowId: record.flowId, step: record.step, totalSteps: record.totalSteps } });
+      return res.status(200).json({ success: true, link: { ...record, url: `/s/${token}` } });
+    }
+
     /* ---------- APP CONTROL ---------- */
     if (action === "saveSystem") {
       const maintenance = body.maintenance === true;
