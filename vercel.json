@@ -1,7 +1,6 @@
 {
   "rewrites": [
-    { "source": "/get-key", "destination": "/get-key.html" },
-    { "source": "/s/:token", "destination": "/api/shortlink?token=:token" }
+    { "source": "/get-key", "destination": "/get-key.html" }
   ],
   "headers": [
     {

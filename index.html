@@ -70,49 +70,6 @@
 <small class="hint">Format BIMZ-XXXX-XXXX-XXXX. Default 1 hari, 1 device. Halaman publik: <a href="/get-key" target="_blank" rel="noopener">/get-key</a></small>
 <p id="genStatus" class="status"></p>
 
-<div id="getKeyFlowSection"><h3>PUBLIC GET KEY FLOW</h3>
-<div class="flowConfig">
-  <label><input id="publicSingleEnabled" type="checkbox"> AKTIF 1 SHORT LINK</label>
-  <div class="flowRow">
-    <input id="publicSingleAmount" type="number" min="1" max="3650" value="1" placeholder="Durasi">
-    <select id="publicSingleUnit"><option value="hour">JAM</option><option value="minute">MENIT</option><option value="day">HARI</option></select>
-  </div>
-  <label><input id="publicDoubleEnabled" type="checkbox"> AKTIF 2 SHORT LINK</label>
-  <div class="flowRow">
-    <input id="publicDoubleAmount" type="number" min="1" max="3650" value="3" placeholder="Durasi">
-    <select id="publicDoubleUnit"><option value="hour">JAM</option><option value="minute">MENIT</option><option value="day">HARI</option></select>
-  </div>
-  <input id="publicFinalDestination" value="/get-key?final=1" placeholder="Final Get Key URL / path">
-  <button id="saveGetKeyFlowBtn">SAVE GET KEY FLOW</button>
-  <small class="hint">Setiap klik publik membuat short link baru. Mode 2 short link otomatis membuat Step 1 → Step 2 → Get Key. Token lama tetap one-time.</small>
-  <p id="getKeyFlowStatus" class="status"></p>
-</div>
-
-<h3>GET KEY SHORT LINKS</h3>
-<div class="flowConfig">
-  <input id="slDestination" placeholder="Destination, contoh /get-key?final=1 atau /s/TOKEN">
-  <div class="flowRow">
-    <input id="slToken" placeholder="Short code manual (opsional)">
-    <input id="slDuration" type="number" min="1" value="3" placeholder="Durasi">
-    <select id="slUnit"><option value="hour">JAM</option><option value="minute">MENIT</option><option value="day">HARI</option></select>
-  </div>
-  <div class="flowRow">
-    <input id="slFlowId" placeholder="Flow ID (untuk 2 step, opsional)">
-    <input id="slStep" type="number" min="1" value="1" placeholder="Step">
-    <input id="slTotalSteps" type="number" min="1" value="1" placeholder="Total step">
-  </div>
-  <button id="createShortLinkBtn">CREATE SHORT LINK</button>
-  <p id="shortLinkStatus" class="status"></p>
-  <div class="tableWrap">
-    <table>
-      <thead><tr><th>SHORT LINK</th><th>DESTINATION</th><th>EXPIRES</th><th>STEP</th><th>STATUS</th><th>ACTION</th></tr></thead>
-      <tbody id="shortLinkTable"></tbody>
-    </table>
-  </div>
-</div>
-
-</div>
-
 <h3>APP CONTROL</h3>
 
 <div class="systemGrid">
