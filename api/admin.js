@@ -1,5 +1,6 @@
-import { db } from "./firebase.js";
-import { requireAdmin } from "./auth.js";
+import { db, adminAuth } from "./firebase.js";
+import { requireAdmin, assertOwner } from "./auth.js";
+import { isOwnerEmail, sanitizeLimits, sanitizePermissions, effectiveLimits } from "./_lib/users.js";
 import { audit } from "./_lib/audit.js";
 import { rateLimit } from "./_lib/ratelimit.js";
 import {
@@ -33,7 +34,8 @@ function normalizeClaims(claims) {
 
 async function readKeys() {
   const now = Date.now();
-  const [licenses, legacy] = await Promise.all([db.ref("licenses").get(), db.ref("keys").get()]);
+  const [licenses, legacy, users] = await Promise.all([db.ref("licenses").get(), db.ref("keys").get(), db.ref("users").get()]);
+  const people = users.val() || {};
   const out = [];
   const add = (values, node) => {
     for (const [key, raw] of Object.entries(values || {})) {
@@ -53,6 +55,8 @@ async function readKeys() {
         maxDevices: Number(value.maxDevices || 0),
         revokedAt: Number(value.revokedAt || 0),
         revokedBy: value.revokedBy || "",
+        sellerId: value.sellerId || "",
+        sellerName: value.sellerId ? String(people[value.sellerId]?.name || people[value.sellerId]?.email || "(akun dihapus)") : "",
         claimCount: claims.length,
         claims
       });
@@ -66,6 +70,49 @@ async function readKeys() {
 function positiveDays(value) {
   const days = Number(value);
   return Number.isFinite(days) && days > 0 && days <= MAX_DURATION_DAYS ? days : null;
+}
+
+
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+
+function badRequest(res, message, status = 400) {
+  return res.status(status).json({ success: false, error: "BAD_REQUEST", message });
+}
+
+function publicUser(uid, value) {
+  const permissions = sanitizePermissions(value?.permissions);
+  const owner = isOwnerEmail(value?.email);
+  return {
+    uid,
+    email: String(value?.email || ""),
+    name: String(value?.name || ""),
+    active: value?.active === true,
+    owner,
+    permissions: owner ? { seller: true, admin: true, owner: true } : permissions,
+    limits: effectiveLimits(value),
+    customLimits: value?.limits || {},
+    createdAt: Number(value?.createdAt || 0),
+    updatedAt: Number(value?.updatedAt || 0)
+  };
+}
+
+/* Akun owner (ADMIN_EMAIL) dilindungi: tidak bisa diubah/dinonaktifkan/dihapus lewat API. */
+async function targetIsOwner(uid, record) {
+  if (isOwnerEmail(record?.email)) return true;
+  try {
+    return isOwnerEmail((await adminAuth.getUser(uid)).email);
+  } catch {
+    return false;
+  }
+}
+
+async function setAuthDisabled(uid, disabled) {
+  try {
+    await adminAuth.updateUser(uid, { disabled });
+    if (disabled) await adminAuth.revokeRefreshTokens(uid);
+  } catch (error) {
+    console.error("AUTH UPDATE ERROR", error);
+  }
 }
 
 export default async function handler(req, res) {
@@ -216,6 +263,97 @@ export default async function handler(req, res) {
       snap.forEach(child => { entries.push({ id: child.key, ...child.val() }); });
       entries.reverse();
       return res.status(200).json({ success: true, logs: entries });
+    }
+
+    /* ---------- USER MANAGEMENT (OWNER ONLY) ---------- */
+    if (["listUsers", "saveUser", "setUserActive", "deleteUser"].includes(action)) {
+      assertOwner(admin);
+
+      if (action === "listUsers") {
+        const snap = await db.ref("users").get();
+        const users = Object.entries(snap.val() || {})
+          .map(([uid, value]) => publicUser(uid, value))
+          .sort((a, b) => Number(b.owner) - Number(a.owner) || a.email.localeCompare(b.email));
+        return res.status(200).json({ success: true, users });
+      }
+
+      if (action === "saveUser") {
+        const userEmail = String(body.email || "").trim().toLowerCase();
+        const wantName = body.name === undefined ? null : String(body.name).trim().slice(0, 100);
+        const password = body.password === undefined || body.password === "" ? null : String(body.password);
+        const permissions = sanitizePermissions(body.permissions);
+        const wantActive = body.active === undefined ? null : body.active === true;
+
+        if (!EMAIL_RE.test(userEmail)) return badRequest(res, "Email tidak valid.");
+        if (isOwnerEmail(userEmail)) return badRequest(res, "Akun owner dilindungi dan tidak bisa diubah.", 403);
+        if (!permissions.admin && !permissions.seller) return badRequest(res, "Pilih minimal satu akses (Admin / Seller).");
+        if (password !== null && (password.length < 8 || password.length > 128)) return badRequest(res, "Password harus 8-128 karakter.");
+
+        let authUser = null;
+        try {
+          authUser = await adminAuth.getUserByEmail(userEmail);
+        } catch (error) {
+          if (error.code !== "auth/user-not-found") throw error;
+        }
+
+        let created = false;
+        if (!authUser) {
+          if (password === null) return badRequest(res, "Password wajib untuk akun baru (min. 8 karakter).");
+          try {
+            authUser = await adminAuth.createUser({ email: userEmail, password, displayName: wantName || undefined, disabled: wantActive === false });
+            created = true;
+          } catch (error) {
+            if (error.code === "auth/invalid-email" || error.code === "auth/invalid-password") return badRequest(res, "Email atau password tidak valid.");
+            throw error;
+          }
+        } else if (password !== null) {
+          await adminAuth.updateUser(authUser.uid, { password });
+        }
+
+        if (await targetIsOwner(authUser.uid, { email: userEmail })) return badRequest(res, "Akun owner dilindungi dan tidak bisa diubah.", 403);
+
+        const ref = db.ref(`users/${authUser.uid}`);
+        const previous = (await ref.get()).val() || {};
+        // Field yang tidak dikirim dipertahankan (mis. update permission tidak mengaktifkan ulang akun nonaktif).
+        const name = wantName === null ? String(previous.name || "") : wantName;
+        const active = wantActive === null ? previous.active !== false : wantActive;
+        const limits = body.limits === undefined ? sanitizeLimits(previous.limits) : sanitizeLimits(body.limits);
+        const record = {
+          email: userEmail,
+          name,
+          active,
+          permissions,
+          createdAt: Number(previous.createdAt || now),
+          updatedAt: now,
+          createdBy: previous.createdBy || admin.uid
+        };
+        if (Object.keys(limits).length) record.limits = limits;
+        await ref.set(record);
+        await setAuthDisabled(authUser.uid, !active);
+        await audit(created ? "user_created" : "user_updated", { actor, ip, target: userEmail, meta: { admin: permissions.admin, seller: permissions.seller, active } });
+        return res.status(200).json({ success: true, user: publicUser(authUser.uid, record), created });
+      }
+
+      const uid = String(body.uid || "");
+      if (!/^[A-Za-z0-9]{6,128}$/.test(uid)) return badRequest(res, "UID tidak valid.");
+      const ref = db.ref(`users/${uid}`);
+      const record = (await ref.get()).val();
+      if (!record) return res.status(404).json({ success: false, error: "BAD_REQUEST", message: "USER NOT FOUND" });
+      if (uid === admin.uid || (await targetIsOwner(uid, record))) return badRequest(res, "Akun owner dilindungi dan tidak bisa diubah.", 403);
+
+      if (action === "setUserActive") {
+        const active = body.active === true;
+        await ref.update({ active, updatedAt: now });
+        await setAuthDisabled(uid, !active);
+        await audit(active ? "user_activated" : "user_deactivated", { actor, ip, target: record.email });
+        return res.status(200).json({ success: true, uid, active });
+      }
+
+      // deleteUser: key milik seller TIDAK dihapus (tetap bisa dikelola Admin/Owner).
+      await ref.remove();
+      try { await adminAuth.deleteUser(uid); } catch (error) { if (error.code !== "auth/user-not-found") throw error; }
+      await audit("user_deleted", { actor, ip, target: record.email });
+      return res.status(200).json({ success: true, uid });
     }
 
     /* ---------- APP CONTROL ---------- */
