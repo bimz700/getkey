@@ -165,6 +165,47 @@ function formatExpiry(timestamp) {
 }
 
 
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\'":"&#39;"}[c]||c));}
+
+const slDestination = document.getElementById("slDestination");
+const slToken = document.getElementById("slToken");
+const slDuration = document.getElementById("slDuration");
+const slUnit = document.getElementById("slUnit");
+const slFlowId = document.getElementById("slFlowId");
+const slStep = document.getElementById("slStep");
+const slTotalSteps = document.getElementById("slTotalSteps");
+const createShortLinkBtn = document.getElementById("createShortLinkBtn");
+const shortLinkStatus = document.getElementById("shortLinkStatus");
+const shortLinkTable = document.getElementById("shortLinkTable");
+
+async function loadShortLinks(){
+  if (!shortLinkTable) return;
+  try {
+    const data = await apiRequest({method:"POST", body:JSON.stringify({action:"listShortLinks"})});
+    shortLinkTable.innerHTML = (data.links||[]).map(x => {
+      const url = `${location.origin}/s/${encodeURIComponent(x.token)}`;
+      const status = x.usedAt ? "USED" : (x.expiresAt && Date.now() >= x.expiresAt ? "EXPIRED" : "ACTIVE");
+      return `<tr><td><code>${url}</code></td><td>${escapeHtml(x.destination)}</td><td>${formatDate(x.expiresAt)}</td><td>${x.step}/${x.totalSteps}</td><td>${status}</td><td><button class="smallBtn" data-copy-sl="${escapeHtml(url)}">COPY</button> <button class="danger smallBtn" data-del-sl="${escapeHtml(x.token)}">DELETE</button></td></tr>`;
+    }).join("") || `<tr><td colspan="6">Belum ada short link.</td></tr>`;
+  } catch(e){ if(shortLinkStatus) shortLinkStatus.textContent="Gagal memuat short link: "+e.message; }
+}
+
+createShortLinkBtn?.addEventListener("click", async()=>{
+  shortLinkStatus.textContent="Membuat...";
+  try {
+    const data=await apiRequest({method:"POST", body:JSON.stringify({action:"createShortLink", destination:slDestination.value.trim(), token:slToken.value.trim(), durationAmount:Number(slDuration.value), durationUnit:slUnit.value, flowId:slFlowId.value.trim(), step:Number(slStep.value), totalSteps:Number(slTotalSteps.value)})});
+    shortLinkStatus.textContent=`Berhasil: ${location.origin}${data.link.url}`;
+    await loadShortLinks();
+  } catch(e){ shortLinkStatus.textContent="Gagal: "+e.message; }
+});
+
+shortLinkTable?.addEventListener("click", async(e)=>{
+  const copy=e.target.closest("[data-copy-sl]");
+  const del=e.target.closest("[data-del-sl]");
+  if(copy){ await navigator.clipboard.writeText(copy.dataset.copySl); shortLinkStatus.textContent="Link disalin."; }
+  if(del){ try { await apiRequest({method:"POST",body:JSON.stringify({action:"deleteShortLink",token:del.dataset.delSl})}); await loadShortLinks(); } catch(err){ shortLinkStatus.textContent="Gagal: "+err.message; } }
+});
+
 /* =========================
    LOAD
 ========================= */
@@ -256,6 +297,7 @@ async function load() {
 
     panelStatus.textContent =
       `${keys.length} key.`;
+    loadShortLinks();
 
   } catch (error) {
 
