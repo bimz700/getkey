@@ -538,3 +538,5 @@ tbody tr:hover{
 .userChecks label{display:flex;align-items:center;gap:6px;cursor:pointer}
 .badge.perm{min-width:0;margin-right:4px;font-size:10px}
 @media (max-width:760px){.userForm{grid-template-columns:1fr}}
+
+.flowConfig{display:grid;gap:10px;margin-bottom:22px}.flowConfig label{display:flex;align-items:center;gap:8px;font-size:13px}.flowRow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.flowConfig input,.flowConfig select{min-width:0}.flowConfig .tableWrap{margin-top:10px}@media(max-width:720px){.flowRow{grid-template-columns:1fr}}

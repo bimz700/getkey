@@ -177,6 +177,16 @@ const slTotalSteps = document.getElementById("slTotalSteps");
 const createShortLinkBtn = document.getElementById("createShortLinkBtn");
 const shortLinkStatus = document.getElementById("shortLinkStatus");
 const shortLinkTable = document.getElementById("shortLinkTable");
+const publicSingleEnabled = document.getElementById("publicSingleEnabled");
+const publicSingleAmount = document.getElementById("publicSingleAmount");
+const publicSingleUnit = document.getElementById("publicSingleUnit");
+const publicDoubleEnabled = document.getElementById("publicDoubleEnabled");
+const publicDoubleAmount = document.getElementById("publicDoubleAmount");
+const publicDoubleUnit = document.getElementById("publicDoubleUnit");
+const publicFinalDestination = document.getElementById("publicFinalDestination");
+const saveGetKeyFlowBtn = document.getElementById("saveGetKeyFlowBtn");
+const getKeyFlowStatus = document.getElementById("getKeyFlowStatus");
+
 
 async function loadShortLinks(){
   if (!shortLinkTable) return;
@@ -198,6 +208,40 @@ createShortLinkBtn?.addEventListener("click", async()=>{
     await loadShortLinks();
   } catch(e){ shortLinkStatus.textContent="Gagal: "+e.message; }
 });
+
+saveGetKeyFlowBtn?.addEventListener("click", async()=>{
+  if (getKeyFlowStatus) getKeyFlowStatus.textContent = "Menyimpan...";
+  try {
+    const data = await apiRequest({method:"POST", body:JSON.stringify({
+      action:"saveGetKeyFlow",
+      singleEnabled: !!publicSingleEnabled?.checked,
+      singleAmount: Number(publicSingleAmount?.value || 1),
+      singleUnit: publicSingleUnit?.value || "hour",
+      doubleEnabled: !!publicDoubleEnabled?.checked,
+      doubleAmount: Number(publicDoubleAmount?.value || 3),
+      doubleUnit: publicDoubleUnit?.value || "hour",
+      finalDestination: (publicFinalDestination?.value || "/get-key?final=1").trim()
+    })});
+    if (getKeyFlowStatus) getKeyFlowStatus.textContent = "Get Key flow tersimpan.";
+    if (data.config) loadPublicFlowConfig(data.config);
+  } catch(e) { if (getKeyFlowStatus) getKeyFlowStatus.textContent = "Gagal: "+e.message; }
+});
+
+function loadPublicFlowConfig(config) {
+  const single = config?.single || {};
+  const dbl = config?.double || {};
+  publicSingleEnabled && (publicSingleEnabled.checked = single.enabled === true);
+  publicDoubleEnabled && (publicDoubleEnabled.checked = dbl.enabled === true);
+  publicFinalDestination && (publicFinalDestination.value = config?.finalDestination || single.finalDestination || dbl.finalDestination || "/get-key?final=1");
+  const setDuration = (obj, amountEl, unitEl, fallback) => {
+    const ms = Number(obj?.durationMs || 0);
+    if (!ms) { if (amountEl) amountEl.value = fallback; return; }
+    if (ms % 86400000 === 0) { amountEl && (amountEl.value = ms / 86400000); unitEl && (unitEl.value = "day"); }
+    else { amountEl && (amountEl.value = Math.max(1, Math.round(ms / 3600000))); unitEl && (unitEl.value = "hour"); }
+  };
+  setDuration(single, publicSingleAmount, publicSingleUnit, 1);
+  setDuration(dbl, publicDoubleAmount, publicDoubleUnit, 3);
+}
 
 shortLinkTable?.addEventListener("click", async(e)=>{
   const copy=e.target.closest("[data-copy-sl]");
@@ -240,6 +284,8 @@ async function load() {
 
     const system =
       data.system || {};
+
+    loadPublicFlowConfig(system.getKeyFlow || {});
 
 
     maintenance.checked =
@@ -842,6 +888,7 @@ function openPanel(name, remember) {
     adminEmail.textContent = (me.email || "") + (me.owner ? " · OWNER" : " · ADMIN");
     switchPanelBtn.classList.toggle("hidden", me.panels.length < 2);
     document.getElementById("userSection").classList.toggle("hidden", !me.owner);
+    document.getElementById("getKeyFlowSection")?.classList.toggle("hidden", !me.owner);
     load();
     loadAudit();
     if (me.owner) loadUsers();
