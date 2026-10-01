@@ -265,6 +265,13 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, logs: entries });
     }
 
+    /* ---------- CLEAR AUDIT LOG (OWNER ONLY) ---------- */
+    if (action === "clearAudit") {
+      assertOwner(admin);
+      await db.ref("auditLogs").remove();
+      return res.status(200).json({ success: true, message: "Semua audit log berhasil dihapus." });
+    }
+
     /* ---------- USER MANAGEMENT (OWNER ONLY) ---------- */
     if (["listUsers", "saveUser", "setUserActive", "deleteUser"].includes(action)) {
       assertOwner(admin);
