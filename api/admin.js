@@ -419,6 +419,31 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, link: { ...record, url: `/s/${token}` } });
     }
 
+    /* ---------- GET KEY PUBLIC FLOW CONFIG ---------- */
+    if (action === "saveGetKeyFlow") {
+      assertOwner(admin);
+      const parseDuration = (amount, unit) => {
+        const n = Number(amount);
+        const u = String(unit || "hour").toLowerCase();
+        const ms = u === "minute" ? 60000 : u === "day" ? 86400000 : 3600000;
+        if (!Number.isFinite(n) || n <= 0 || n > 3650) throw new Error("Durasi tidak valid.");
+        return Math.round(n * ms);
+      };
+      const singleMs = parseDuration(body.singleAmount, body.singleUnit);
+      const doubleMs = parseDuration(body.doubleAmount, body.doubleUnit);
+      const finalDestination = String(body.finalDestination || "/get-key?final=1").trim();
+      if (!(finalDestination.startsWith("/") || /^https?:\/\//i.test(finalDestination))) return badRequest(res, "Final destination harus URL http(s) atau path internal.");
+      const config = {
+        single: { enabled: body.singleEnabled === true, durationMs: singleMs, finalDestination },
+        double: { enabled: body.doubleEnabled === true, durationMs: doubleMs, finalDestination },
+        updatedAt: now,
+        updatedBy: admin.uid
+      };
+      await db.ref("system/getKeyFlow").set(config);
+      await audit("getkey_flow_config_saved", { actor, ip, meta: { single: config.single.enabled, double: config.double.enabled, singleMs, doubleMs } });
+      return res.status(200).json({ success: true, config });
+    }
+
     /* ---------- APP CONTROL ---------- */
     if (action === "saveSystem") {
       const maintenance = body.maintenance === true;
