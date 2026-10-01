@@ -800,6 +800,7 @@ function openPanel(name, remember) {
     adminEmail.textContent = (me.email || "") + (me.owner ? " · OWNER" : " · ADMIN");
     switchPanelBtn.classList.toggle("hidden", me.panels.length < 2);
     document.getElementById("userSection").classList.toggle("hidden", !me.owner);
+    if (clearAuditBtn) clearAuditBtn.classList.toggle("hidden", !me.owner);
     load();
     loadAudit();
     if (me.owner) loadUsers();
@@ -932,6 +933,7 @@ if (keyTable) {
 ========================= */
 const auditTable = document.getElementById("auditTable");
 const refreshAuditBtn = document.getElementById("refreshAuditBtn");
+const clearAuditBtn = document.getElementById("clearAuditBtn");
 
 async function loadAudit() {
   if (!auditTable) return;
@@ -961,6 +963,24 @@ async function loadAudit() {
 
 if (refreshAuditBtn) {
   refreshAuditBtn.onclick = () => loadAudit();
+}
+
+if (clearAuditBtn) {
+  clearAuditBtn.classList.toggle("hidden", !me?.owner);
+  clearAuditBtn.onclick = async () => {
+    if (!me?.owner) return;
+    if (!confirm("Hapus SEMUA audit log? Tindakan ini tidak bisa dibatalkan.")) return;
+    clearAuditBtn.disabled = true;
+    try {
+      await apiRequest({ method: "POST", body: JSON.stringify({ action: "clearAudit" }) });
+      await loadAudit();
+      panelStatus.textContent = "Semua audit log berhasil dihapus.";
+    } catch (error) {
+      panelStatus.textContent = "Gagal menghapus audit log: " + error.message;
+    } finally {
+      clearAuditBtn.disabled = false;
+    }
+  };
 }
 
 

@@ -131,13 +131,6 @@
     </table>
   </div>
 
-  <div class="sectionTitle"><h3>AUDIT LOG</h3><button id="refreshAuditBtn" class="smallBtn">REFRESH</button></div>
-  <div class="tableWrap">
-    <table>
-      <thead><tr><th>WAKTU</th><th>EVENT</th><th>KEY</th><th>DEVICE</th><th>DETAIL</th></tr></thead>
-      <tbody id="auditTable"></tbody>
-    </table>
-  </div>
 
   <div id="userSection" class="hidden">
     <div class="sectionTitle"><h3>USER MANAGEMENT</h3><button id="refreshUsersBtn" class="smallBtn">REFRESH</button></div>
@@ -162,6 +155,15 @@
         <tbody id="userTable"></tbody>
       </table>
     </div>
+  </div>
+
+
+  <div class="sectionTitle"><h3>AUDIT LOG</h3><div class="topActions"><button id="refreshAuditBtn" class="smallBtn">REFRESH</button><button id="clearAuditBtn" class="danger smallBtn hidden">HAPUS SEMUA LOG</button></div></div>
+  <div class="tableWrap">
+    <table>
+      <thead><tr><th>WAKTU</th><th>EVENT</th><th>KEY</th><th>DEVICE</th><th>DETAIL</th></tr></thead>
+      <tbody id="auditTable"></tbody>
+    </table>
   </div>
 </section>
 
