@@ -1,4 +1,5 @@
 import { db, adminAuth } from "./firebase.js";
+import { randomBytes } from "node:crypto";
 import { requireAdmin, assertOwner } from "./auth.js";
 import { isOwnerEmail, sanitizeLimits, sanitizePermissions, effectiveLimits } from "./_lib/users.js";
 import { audit } from "./_lib/audit.js";
