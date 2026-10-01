@@ -6,6 +6,10 @@
     "system": {
       ".read": true,
       ".write": false
+    },
+
+    "licenses": {
+      ".indexOn": ["sellerId"]
     }
   }
 }

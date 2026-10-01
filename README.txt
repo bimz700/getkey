@@ -1,4 +1,4 @@
-MZMODZ ADMIN PANEL v6  (Get Key + Verify Key + Android API)
+MZMODZ ADMIN PANEL v7  (Get Key + Verify Key + Android API + Multi-Role/Seller)
 
 Root URL (/)   : Firebase Email/Password admin login + panel.
 /get-key       : halaman Get Key publik (generate key).
@@ -9,7 +9,8 @@ ALUR APLIKASI ANDROID
   Announcement -> Maintenance -> Update (tetap membaca Firebase /system langsung)
   -> Key Validation: POST /api/verify-key (BUKAN lagi baca /keys / tulis /claims)
   -> MzmodzActivity.
-Kode Android pengganti: android/MainActivity_key_validation.java
+Kode Android (Sketchware): android/1_ONSTART_system_check.java (cek /system saat start, tanpa
+validasi key) dan android/2_LOGIN_button_verify_key.java (hanya dijalankan saat tombol LOGIN ditekan).
 
 ==================== API ====================
 PUBLIK (header X-Device-Identifier wajib: ANDROID_ID / id browser, min 8 karakter,
@@ -46,6 +47,35 @@ RATE LIMIT (per IP, RTDB /rateLimits)
   generate POST 10/jam | generate GET 60/menit | verify 60/menit | getkey lama 30/menit
   admin 120/menit
 
+
+==================== ROLE / PERMISSION (v7) ====================
+Permission bisa dikombinasikan per akun: admin, seller (owner khusus). Disimpan di
+/users/{uid} (hanya server): {email, name, active, permissions:{seller,admin,owner}, limits?, createdAt, updatedAt}.
+- OWNER = akun ber-email ADMIN_EMAIL (akun admin existing). Ditentukan dari environment variable,
+  BUKAN dari database: tidak bisa diberikan/dicabut/dinonaktifkan/dihapus lewat API, dan nilai
+  permissions.owner di database selalu diabaikan. Owner otomatis admin + seller.
+- ADMIN (permissions.admin): semua fungsi Admin Panel existing; tanpa User Management.
+- SELLER (permissions.seller): Seller Panel; hanya key miliknya.
+Login: /api/me menentukan panel. Seller saja -> Seller Panel; admin saja -> Admin Panel;
+lebih dari satu (admin+seller / owner) -> pilihan panel. Tombol SWITCH PANEL ada di tiap panel;
+pilihan diingat selama sesi browser.
+
+API tambahan
+  GET  /api/me            { uid,email,name,owner,admin,seller,panels,limits }   (token Firebase)
+  GET  /api/seller        key milik seller (difilter di server: licenses.sellerId == uid) + stats
+  POST /api/seller        {action:"createKey", durationDays, maxDevices, count}
+  POST /api/admin (OWNER saja): listUsers | saveUser{email,name,password?,permissions{admin,seller},active,limits{maxDurationDays,maxDevices}}
+                               | setUserActive{uid,active} | deleteUser{uid}
+Semua endpoint memverifikasi token, UID, permission, dan ownership di server.
+Key buatan seller: source "seller", sellerId = createdBy = UID seller, createdByEmail. Key lama
+(tanpa sellerId) dan stok /keys hanya terlihat oleh Admin/Owner. Seller TIDAK bisa revoke/extend/delete
+(tetap Admin) dan tidak melihat IP device.
+Limit seller (bisa diubah Owner per akun): default maks 365 hari dan 10 device per key, 20 key per request,
+20 request pembuatan per jam per IP.
+Menghapus user tidak menghapus key miliknya. Menonaktifkan user: langsung ditolak server + akun Auth disabled.
+Rules: hanya ditambah index licenses.sellerId; /users, /licenses, /auditLogs tetap tertutup untuk klien.
+Tidak ada environment variable baru.
+
 ==================== DATABASE (Firebase RTDB) ====================
 /keys/{KEY}        stok lama, TIDAK diubah secara destruktif. Field lama: status, maxDevices,
                    durationDays, createdAt, updatedAt, claims/{deviceId}. Opsional baru:
@@ -59,6 +89,7 @@ RATE LIMIT (per IP, RTDB /rateLimits)
                    maxDevices, issuedTo(hash browser), createdBy, revokedAt, revokedBy,
                    extendedAt, lastClaimAt, claims/{sha256(device)}:
                    {device, ip, claimedAt, deviceIndex, model?}
+/users/{uid}       lihat bagian ROLE (privat, hanya server)
 /deviceKeys/{sha256(browser)} -> KEY generate aktif untuk browser itu
 /auditLogs/{pushId}  {type, at, key, device(12 hex hash), ip, code, actor, meta}
 /rateLimits/{scope}/{sha256(ip)}  {s, c}
@@ -92,5 +123,6 @@ Tidak ada secret tambahan. firebase-config.js hanya config web PUBLIK untuk logi
 1. Pastikan 5 Environment Variables terisi di Vercel.
 2. Pasang database.rules.json (tahap 1) di Firebase Console.
 3. Deploy backend (git push / vercel --prod). Tanpa build step; dependency: firebase-admin.
-4. Ganti kode key di Android sesuai android/MainActivity_key_validation.java, rilis APK baru.
+4. Android: pasang blok 1 di event start dan blok 2 di onClick tombol LOGIN; hapus semua blok
+   FirebaseDB1/_firebase yang memakai path keys/; rilis APK baru.
 5. Setelah APK lama tidak dipakai, pasang database.rules.strict.json (tahap 2).

@@ -17,13 +17,27 @@
   <p id="loginStatus" class="status"></p>
 </section>
 
+<section id="panelSelect" class="card hidden">
+  <div class="brand">MZ<span>MODZ</span></div>
+  <p class="subtitle">SELECT PANEL</p>
+  <p id="selectUser" class="muted selectUser"></p>
+  <div class="selectGrid">
+    <button id="selectAdminBtn">ADMIN PANEL</button>
+    <button id="selectSellerBtn">SELLER PANEL</button>
+  </div>
+  <button id="selectLogoutBtn" class="danger smallBtn selectLogout">LOGOUT</button>
+</section>
+
 <section id="panel" class="card hidden">
   <div class="topbar">
     <div>
       <div class="brand small">MZ<span>MODZ</span></div>
       <div id="adminEmail" class="muted"></div>
     </div>
-    <button id="logoutBtn" class="danger smallBtn">LOGOUT</button>
+    <div class="topActions">
+      <button id="switchPanelBtn" class="smallBtn hidden">SWITCH PANEL</button>
+      <button id="logoutBtn" class="danger smallBtn">LOGOUT</button>
+    </div>
   </div>
 
   <h3>KEY MANAGEMENT</h3>
@@ -124,8 +138,76 @@
       <tbody id="auditTable"></tbody>
     </table>
   </div>
+
+  <div id="userSection" class="hidden">
+    <div class="sectionTitle"><h3>USER MANAGEMENT</h3><button id="refreshUsersBtn" class="smallBtn">REFRESH</button></div>
+    <div class="userForm">
+      <input id="userEmail" type="email" placeholder="Email user" autocomplete="off">
+      <input id="userName" placeholder="Nama (opsional)" autocomplete="off">
+      <input id="userPassword" type="password" placeholder="Password (wajib akun baru / reset)" autocomplete="new-password">
+      <div class="userChecks">
+        <label><input id="userAdmin" type="checkbox"> Admin</label>
+        <label><input id="userSeller" type="checkbox"> Seller</label>
+        <label><input id="userActive" type="checkbox" checked> Aktif</label>
+      </div>
+      <input id="userMaxDays" type="number" min="1" placeholder="Seller: max hari (kosong = default)">
+      <input id="userMaxDevices" type="number" min="1" placeholder="Seller: max device (kosong = default)">
+      <button id="saveUserBtn">SAVE USER</button>
+    </div>
+    <small class="hint">Owner otomatis full access dan tidak bisa diubah. Isi email akun yang sudah ada untuk mengubah permission-nya.</small>
+    <p id="userStatus" class="status"></p>
+    <div class="tableWrap">
+      <table>
+        <thead><tr><th>EMAIL</th><th>NAMA</th><th>AKSES</th><th>STATUS</th><th>ACTION</th></tr></thead>
+        <tbody id="userTable"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="sellerPanel" class="card hidden">
+  <div class="topbar">
+    <div>
+      <div class="brand small">MZ<span>MODZ</span> <span class="roleTag">SELLER</span></div>
+      <div id="sellerEmail" class="muted"></div>
+    </div>
+    <div class="topActions">
+      <button id="sellerSwitchBtn" class="smallBtn hidden">SWITCH PANEL</button>
+      <button id="sellerLogoutBtn" class="danger smallBtn">LOGOUT</button>
+    </div>
+  </div>
+
+  <h3>MY STATS</h3>
+  <div id="sellerStats" class="statGrid"></div>
+
+  <h3>GENERATE KEY</h3>
+  <div class="generate genKey">
+    <select id="sellerDuration">
+      <option value="1">1 HARI (default)</option>
+      <option value="3">3 HARI</option>
+      <option value="7">7 HARI</option>
+      <option value="30">30 HARI</option>
+      <option value="custom">CUSTOM</option>
+    </select>
+    <input id="sellerCustomDays" class="hidden" type="number" min="1" placeholder="Hari (custom)">
+    <input id="sellerMaxDevices" type="number" min="1" value="1" placeholder="Max device">
+    <input id="sellerCount" type="number" min="1" max="20" value="1" placeholder="Jumlah">
+    <button id="sellerGenBtn">GENERATE</button>
+  </div>
+  <small id="sellerLimitHint" class="hint"></small>
+  <div id="sellerNew" class="newKeys hidden"></div>
+  <p id="sellerStatus" class="status"></p>
+
+  <div class="sectionTitle"><h3>MY KEYS</h3><button id="sellerRefreshBtn" class="smallBtn">REFRESH</button></div>
+  <div class="tableWrap">
+    <table>
+      <thead><tr><th>KEY</th><th>STATUS</th><th>DEVICES</th><th>EXPIRES</th><th>CREATED</th><th>ACTION</th></tr></thead>
+      <tbody id="sellerTable"></tbody>
+    </table>
+  </div>
 </section>
 </main>
 <script type="module" src="admin.js"></script>
+<script type="module" src="seller.js"></script>
 </body>
 </html>

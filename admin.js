@@ -299,7 +299,7 @@ function renderKeys(keys) {
     const k = esc(key.key);
     return `
       <tr>
-        <td class="key">${k}<span class="badge src">${esc(String(key.source || "legacy").toUpperCase())}</span></td>
+        <td class="key">${k}<span class="badge src">${esc(String(key.source || "legacy").toUpperCase())}</span>${key.sellerId ? `<span class="badge src">SELLER: ${esc(key.sellerName || "-")}</span>` : ""}</td>
         <td><span class="badge ${badgeClass}">${esc(state)}</span></td>
         <td>${deviceDisplay}</td>
         <td>${esc(formatExpiry(key.expiresAt))}</td>
@@ -765,46 +765,92 @@ if (refreshBtn) {
    AUTH
 ========================= */
 
-onAuthStateChanged(
-  auth,
-  user => {
+const panelSelect = document.getElementById("panelSelect");
+const sellerPanel = document.getElementById("sellerPanel");
+const selectUser = document.getElementById("selectUser");
+const switchPanelBtn = document.getElementById("switchPanelBtn");
+let me = null;
 
-    if (!user) {
-
-      loginCard.classList.remove(
-        "hidden"
-      );
-
-      panel.classList.add(
-        "hidden"
-      );
-
-      return;
-
-    }
-
-
-    loginCard.classList.add(
-      "hidden"
-    );
-
-    panel.classList.remove(
-      "hidden"
-    );
-
-
-    if (adminEmail) {
-
-      adminEmail.textContent =
-        user.email || "";
-
-    }
-
-
-    load();
-
+async function fetchMe() {
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch("/api/me", {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store"
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || `HTTP ${response.status}`);
+    error.code = data.error || "SERVER_ERROR";
+    throw error;
   }
-);
+  return data;
+}
+
+function showOnly(name) {
+  loginCard.classList.toggle("hidden", name !== "login");
+  panelSelect.classList.toggle("hidden", name !== "select");
+  panel.classList.toggle("hidden", name !== "admin");
+  sellerPanel.classList.toggle("hidden", name !== "seller");
+}
+
+function openPanel(name, remember) {
+  if (remember) sessionStorage.setItem("mzmodz_panel", name);
+  if (name === "admin") {
+    showOnly("admin");
+    adminEmail.textContent = (me.email || "") + (me.owner ? " · OWNER" : " · ADMIN");
+    switchPanelBtn.classList.toggle("hidden", me.panels.length < 2);
+    document.getElementById("userSection").classList.toggle("hidden", !me.owner);
+    load();
+    loadAudit();
+    if (me.owner) loadUsers();
+  } else {
+    showOnly("seller");
+    document.dispatchEvent(new CustomEvent("mz:seller-open", { detail: me }));
+  }
+}
+
+function showSelector() {
+  sessionStorage.removeItem("mzmodz_panel");
+  selectUser.textContent = me.email + (me.owner ? " · OWNER" : "");
+  showOnly("select");
+}
+
+function routeAfterLogin() {
+  const remembered = sessionStorage.getItem("mzmodz_panel");
+  if (remembered && me.panels.includes(remembered)) return openPanel(remembered, false);
+  if (me.panels.length === 1) return openPanel(me.panels[0], false);
+  showSelector();
+}
+
+document.addEventListener("mz:switch-panel", () => showSelector());
+document.addEventListener("mz:logout", async () => { await signOut(auth); });
+document.getElementById("selectAdminBtn").onclick = () => openPanel("admin", true);
+document.getElementById("selectSellerBtn").onclick = () => openPanel("seller", true);
+document.getElementById("selectLogoutBtn").onclick = async () => { await signOut(auth); };
+if (switchPanelBtn) switchPanelBtn.onclick = () => showSelector();
+
+onAuthStateChanged(auth, async user => {
+  if (!user) {
+    me = null;
+    sessionStorage.removeItem("mzmodz_panel");
+    showOnly("login");
+    if (loginBtn) loginBtn.disabled = false;
+    return;
+  }
+
+  try {
+    me = await fetchMe();
+  } catch (error) {
+    me = null;
+    await signOut(auth);
+    loginStatus.textContent = error.code === "NO_ACCESS"
+      ? "Akun ini belum memiliki akses panel."
+      : "Gagal memuat akun: " + error.message;
+    return;
+  }
+  loginStatus.textContent = "";
+  routeAfterLogin();
+});
 
 
 /* =========================
@@ -917,6 +963,122 @@ if (refreshAuditBtn) {
   refreshAuditBtn.onclick = () => loadAudit();
 }
 
-onAuthStateChanged(auth, user => {
-  if (user) loadAudit();
-});
+
+
+/* =========================
+   USER MANAGEMENT (OWNER)
+========================= */
+const userTable = document.getElementById("userTable");
+const userStatus = document.getElementById("userStatus");
+const userEmail = document.getElementById("userEmail");
+const userName = document.getElementById("userName");
+const userPassword = document.getElementById("userPassword");
+const userAdmin = document.getElementById("userAdmin");
+const userSeller = document.getElementById("userSeller");
+const userActive = document.getElementById("userActive");
+const userMaxDays = document.getElementById("userMaxDays");
+const userMaxDevices = document.getElementById("userMaxDevices");
+const saveUserBtn = document.getElementById("saveUserBtn");
+let userCache = [];
+
+async function loadUsers() {
+  if (!userTable) return;
+  try {
+    const data = await apiRequest({ method: "POST", body: JSON.stringify({ action: "listUsers" }) });
+    userCache = Array.isArray(data.users) ? data.users : [];
+    userTable.innerHTML = userCache.length
+      ? userCache.map(user => {
+          const access = user.owner
+            ? `<span class="badge on perm">OWNER</span>`
+            : [user.permissions.admin ? `<span class="badge on perm">ADMIN</span>` : "", user.permissions.seller ? `<span class="badge on perm">SELLER</span>` : ""].join("");
+          const uid = esc(user.uid);
+          const actions = user.owner
+            ? `<span class="muted">PROTECTED</span>`
+            : `<button data-user-edit="${uid}">EDIT</button>
+               <button data-user-toggle="${uid}" data-active="${user.active ? "1" : "0"}">${user.active ? "DEACTIVATE" : "ACTIVATE"}</button>
+               <button class="danger" data-user-delete="${uid}">DELETE</button>`;
+          return `<tr>
+            <td>${esc(user.email)}</td>
+            <td>${esc(user.name || "-")}</td>
+            <td>${access}</td>
+            <td><span class="badge ${user.active ? "on" : "off"}">${user.active ? "ACTIVE" : "INACTIVE"}</span></td>
+            <td>${actions}</td>
+          </tr>`;
+        }).join("")
+      : `<tr><td colspan="5" class="muted">Belum ada user.</td></tr>`;
+  } catch (error) {
+    userTable.innerHTML = `<tr><td colspan="5" class="muted">Gagal memuat user: ${esc(error.message)}</td></tr>`;
+  }
+}
+
+if (saveUserBtn) {
+  saveUserBtn.onclick = async () => {
+    saveUserBtn.disabled = true;
+    userStatus.textContent = "Menyimpan...";
+    try {
+      const limits = {};
+      if (Number(userMaxDays.value) > 0) limits.maxDurationDays = Number(userMaxDays.value);
+      if (Number(userMaxDevices.value) > 0) limits.maxDevices = Number(userMaxDevices.value);
+      const data = await apiRequest({
+        method: "POST",
+        body: JSON.stringify({
+          action: "saveUser",
+          email: userEmail.value.trim(),
+          name: userName.value.trim(),
+          password: userPassword.value,
+          permissions: { admin: userAdmin.checked, seller: userSeller.checked },
+          active: userActive.checked,
+          limits
+        })
+      });
+      userStatus.textContent = data.created ? "User dibuat." : "User diperbarui.";
+      userPassword.value = "";
+      await loadUsers();
+      await loadAudit();
+    } catch (error) {
+      userStatus.textContent = "Gagal: " + error.message;
+    } finally {
+      saveUserBtn.disabled = false;
+    }
+  };
+}
+
+if (userTable) {
+  userTable.addEventListener("click", async event => {
+    const edit = event.target.closest("[data-user-edit]");
+    const toggle = event.target.closest("[data-user-toggle]");
+    const del = event.target.closest("[data-user-delete]");
+    try {
+      if (edit) {
+        const user = userCache.find(item => item.uid === edit.dataset.userEdit);
+        if (!user) return;
+        userEmail.value = user.email;
+        userName.value = user.name || "";
+        userPassword.value = "";
+        userAdmin.checked = user.permissions.admin === true;
+        userSeller.checked = user.permissions.seller === true;
+        userActive.checked = user.active === true;
+        userMaxDays.value = user.customLimits?.maxDurationDays || "";
+        userMaxDevices.value = user.customLimits?.maxDevices || "";
+        userStatus.textContent = "Mengedit " + user.email + ". Klik SAVE USER untuk menyimpan.";
+        userEmail.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else if (toggle) {
+        toggle.disabled = true;
+        await apiRequest({ method: "POST", body: JSON.stringify({ action: "setUserActive", uid: toggle.dataset.userToggle, active: toggle.dataset.active !== "1" }) });
+        await loadUsers();
+        await loadAudit();
+      } else if (del) {
+        if (!confirm("Hapus user ini? Key milik seller tidak ikut terhapus.")) return;
+        del.disabled = true;
+        await apiRequest({ method: "POST", body: JSON.stringify({ action: "deleteUser", uid: del.dataset.userDelete }) });
+        await loadUsers();
+        await loadAudit();
+      }
+    } catch (error) {
+      userStatus.textContent = "Gagal: " + error.message;
+    }
+  });
+}
+
+const refreshUsersBtn = document.getElementById("refreshUsersBtn");
+if (refreshUsersBtn) refreshUsersBtn.onclick = () => loadUsers();

@@ -8,6 +8,10 @@
       ".write": false
     },
 
+    "licenses": {
+      ".indexOn": ["sellerId"]
+    },
+
     "keys": {
       ".read": true,
       ".write": false,
