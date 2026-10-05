@@ -238,6 +238,53 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, key, expiresAt });
     }
 
+    /* ---------- BULK DELETE EXPIRED ---------- */
+    if (action === "deleteExpiredKeys") {
+      const [licensesSnap, legacySnap] = await Promise.all([db.ref("licenses").get(), db.ref("keys").get()]);
+      const updates = {};
+      const deletedKeys = [];
+      const nowForExpiry = Date.now();
+
+      const collect = (values, node) => {
+        for (const [key, raw] of Object.entries(values || {})) {
+          const value = raw || {};
+          if (statusOf(value, nowForExpiry) !== "EXPIRED") continue;
+          updates[`${node}/${key}`] = null;
+          deletedKeys.push(key);
+
+          if (node === "licenses" && value.issuedTo) {
+            const idxPath = `deviceKeys/${value.issuedTo}`;
+            // Hanya hapus index jika index tersebut masih menunjuk ke key yang dihapus.
+            // Nilai dicek setelah pembacaan snapshot agar tidak menghapus index milik key lain.
+          }
+        }
+      };
+
+      collect(licensesSnap.val(), "licenses");
+      collect(legacySnap.val(), "keys");
+
+      // Bersihkan deviceKeys hanya untuk license expired yang masih direferensikan oleh index.
+      const deviceRefs = new Map();
+      for (const [key, raw] of Object.entries(licensesSnap.val() || {})) {
+        const value = raw || {};
+        if (statusOf(value, nowForExpiry) !== "EXPIRED" || !value.issuedTo) continue;
+        const idxSnap = await db.ref(`deviceKeys/${value.issuedTo}`).get();
+        if (idxSnap.val() === key) deviceRefs.set(value.issuedTo, key);
+      }
+      for (const issuer of deviceRefs.keys()) updates[`deviceKeys/${issuer}`] = null;
+
+      if (deletedKeys.length) {
+        await db.ref().update(updates);
+        await audit("keys_expired_bulk_deleted", {
+          actor,
+          ip,
+          meta: { count: deletedKeys.length, keys: deletedKeys.slice(0, 100) }
+        });
+      }
+
+      return res.status(200).json({ success: true, deleted: deletedKeys.length });
+    }
+
     /* ---------- DELETE ---------- */
     if (action === "deleteKey") {
       const key = normalizeKey(body.key);
