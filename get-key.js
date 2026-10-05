@@ -1,6 +1,18 @@
 (() => {
   "use strict";
 
+  /* ===== SHORT LINK GATE: sesi hanya di memori halaman (hilang saat refresh/close) ===== */
+  const gateSession = (() => {
+    const match = /^#s=([0-9a-f.]{20,200})$/.exec(location.hash);
+    if (!match) return "";
+    try { history.replaceState(null, "", "/get-key"); } catch { /* abaikan */ }
+    return match[1];
+  })();
+  const backToShortLink = () => location.replace("/get-key"); // server -> MANUAL_SHORT_LINK
+  if (!gateSession) { backToShortLink(); return; }
+  window.addEventListener("pageshow", e => { if (e.persisted) backToShortLink(); });
+  document.getElementById("gkMain").classList.remove("hidden");
+
   const $ = id => document.getElementById(id);
   const btn = $("getKeyBtn"), btnLabel = $("btnLabel"), spinner = $("btnSpinner");
   const notice = $("notice"), result = $("result"), copyBtn = $("copyBtn");
@@ -39,10 +51,11 @@
   async function api(method) {
     const response = await fetch("/api/generate-key", {
       method,
-      headers: { "X-Device-Identifier": deviceId() },
+      headers: { "X-Device-Identifier": deviceId(), "X-Gate-Session": gateSession },
       cache: "no-store"
     });
     const data = await response.json().catch(() => ({}));
+    if (data.error === "GATE_REQUIRED") { backToShortLink(); throw new Error("Akses berakhir."); }
     if (!response.ok || data.success === false) {
       const code = data.error || "SERVER_ERROR";
       const error = new Error(data.message || ERR[code] || ERR.SERVER_ERROR);

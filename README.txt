@@ -74,7 +74,7 @@ Limit seller (bisa diubah Owner per akun): default maks 365 hari dan 10 device p
 20 request pembuatan per jam per IP.
 Menghapus user tidak menghapus key miliknya. Menonaktifkan user: langsung ditolak server + akun Auth disabled.
 Rules: hanya ditambah index licenses.sellerId; /users, /licenses, /auditLogs tetap tertutup untuk klien.
-Tidak ada environment variable baru.
+(Fitur Short Link menambah 1 environment variable: GETKEY_ACCESS_TOKEN, lihat bagian SHORT LINK.)
 
 ==================== DATABASE (Firebase RTDB) ====================
 /keys/{KEY}        stok lama, TIDAK diubah secara destruktif. Field lama: status, maxDevices,
@@ -117,7 +117,7 @@ Semua secret hanya dari Vercel > Settings > Environment Variables (process.env.*
 Repository tidak berisi .env / .env.example / nilai credential.
 Wajib: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (baris baru boleh \n),
        FIREBASE_DATABASE_URL, ADMIN_EMAIL.
-Tidak ada secret tambahan. firebase-config.js hanya config web PUBLIK untuk login admin.
+Tambahan Short Link: GETKEY_ACCESS_TOKEN (acak, min. 16 karakter). firebase-config.js hanya config web PUBLIK untuk login admin.
 
 ==================== DEPLOY ====================
 1. Pastikan 5 Environment Variables terisi di Vercel.
@@ -126,3 +126,15 @@ Tidak ada secret tambahan. firebase-config.js hanya config web PUBLIK untuk logi
 4. Android: pasang blok 1 di event start dan blok 2 di onClick tombol LOGIN; hapus semua blok
    FirebaseDB1/_firebase yang memakai path keys/; rilis APK baru.
 5. Setelah APK lama tidak dipakai, pasang database.rules.strict.json (tahap 2).
+
+==================== SHORT LINK MANUAL (GATE /get-key) ====================
+Alur: Short Link -> /get-key?access=TOKEN -> halaman GET KEY. Hanya satu Short Link manual.
+- URL Short Link: konstanta MANUAL_SHORT_LINK di api/_lib/shortlink.js (satu-satunya tempat ganti).
+- Env Vercel: GETKEY_ACCESS_TOKEN (acak, min. 16 karakter, mis. `openssl rand -hex 24`).
+- Tujuan akhir (destination) Short Link di dashboard penyedia: https://DOMAIN/get-key?access=<GETKEY_ACCESS_TOKEN>
+- /get-key tanpa token -> 302 ke MANUAL_SHORT_LINK. Token salah -> 403 (tanpa redirect otomatis).
+- Token valid -> sesi bertanda tangan (HMAC, 30 menit) hanya di memori halaman; URL dibersihkan
+  dengan history.replaceState. Refresh / tutup browser -> sesi hilang -> kembali ke Short Link.
+- POST /api/generate-key wajib header X-Gate-Session (sesi valid); GET status tidak berubah.
+- Pengaman loop: maks 3 redirect ke Short Link per 60 detik, setelah itu halaman error.
+- Ganti token: ubah GETKEY_ACCESS_TOKEN + destination Short Link (redeploy).

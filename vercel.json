@@ -1,8 +1,12 @@
 {
   "rewrites": [
-    { "source": "/get-key", "destination": "/get-key.html" }
+    { "source": "/get-key", "destination": "/api/gate" }
   ],
   "headers": [
+    {
+      "source": "/get-key.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    },
     {
       "source": "/(.*)",
       "headers": [
