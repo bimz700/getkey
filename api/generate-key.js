@@ -35,10 +35,7 @@ export default async function handler(req, res) {
   try {
     const isPost = req.method === "POST";
     // Gate Short Link: membuat key baru hanya dengan sesi valid dari /get-key (GET status tidak diubah).
-    const cookieHeader = String(req.headers.cookie || "");
-    const sessionCookieMatch = /(?:^|;\s*)gk_sid=([0-9a-f]{64})/.exec(cookieHeader);
-    const binding = sessionCookieMatch ? sessionCookieMatch[1] : "";
-    if (isPost && !sessionValid(String(req.headers["x-gate-session"] || ""), binding)) {
+    if (isPost && !sessionValid(String(req.headers["x-gate-session"] || ""))) {
       return res.status(403).json({ success: false, valid: false, error: "GATE_REQUIRED", message: "Akses Short Link diperlukan." });
     }
     const limit = isPost ? await rateLimit(req, "generate", 10, 3600000) : await rateLimit(req, "generate-status", 60, 60000);
