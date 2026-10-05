@@ -2,6 +2,7 @@ import { db } from "./firebase.js";
 import { cors, fail, deviceFrom, getIp, DEFAULT_DURATION_MS, DEFAULT_MAX_DEVICES, readBody } from "./_lib/util.js";
 import { rateLimit } from "./_lib/ratelimit.js";
 import { audit } from "./_lib/audit.js";
+import { sessionValid } from "./_lib/shortlink.js";
 import { createIfAbsent, describe, generateKey, statusOf } from "./_lib/keys.js";
 
 /*
@@ -33,6 +34,13 @@ export default async function handler(req, res) {
 
   try {
     const isPost = req.method === "POST";
+    // Gate Short Link: membuat key baru hanya dengan sesi valid dari /get-key (GET status tidak diubah).
+    const cookieHeader = String(req.headers.cookie || "");
+    const sessionCookieMatch = /(?:^|;\s*)gk_sid=([0-9a-f]{64})/.exec(cookieHeader);
+    const binding = sessionCookieMatch ? sessionCookieMatch[1] : "";
+    if (isPost && !sessionValid(String(req.headers["x-gate-session"] || ""), binding)) {
+      return res.status(403).json({ success: false, valid: false, error: "GATE_REQUIRED", message: "Akses Short Link diperlukan." });
+    }
     const limit = isPost ? await rateLimit(req, "generate", 10, 3600000) : await rateLimit(req, "generate-status", 60, 60000);
     if (!limit.allowed) {
       res.setHeader("Retry-After", String(limit.retryAfter));
