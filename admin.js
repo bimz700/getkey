@@ -39,6 +39,7 @@ const saveKeyBtn = document.getElementById("saveKeyBtn");
 const keyTable = document.getElementById("keyTable");
 
 const refreshBtn = document.getElementById("refreshBtn");
+const deleteExpiredBtn = document.getElementById("deleteExpiredBtn");
 
 const maintenance = document.getElementById("maintenance");
 const updateMode = document.getElementById("updateMode");
@@ -607,6 +608,29 @@ if (saveAnnouncementBtn) {
 
 }
 
+
+/* =========================
+   BULK DELETE EXPIRED
+========================= */
+
+if (deleteExpiredBtn) {
+  deleteExpiredBtn.onclick = async () => {
+    if (!confirm("Hapus SEMUA key yang sudah expired? Key aktif, disabled, dan revoked tidak akan ikut terhapus.")) return;
+    deleteExpiredBtn.disabled = true;
+    try {
+      const data = await apiRequest({
+        method: "POST",
+        body: JSON.stringify({ action: "deleteExpiredKeys" })
+      });
+      panelStatus.textContent = `Berhasil menghapus ${Number(data.deleted || 0)} key expired.`;
+      await load();
+    } catch (error) {
+      panelStatus.textContent = "Gagal: " + error.message;
+    } finally {
+      deleteExpiredBtn.disabled = false;
+    }
+  };
+}
 
 /* =========================
    KEY ACTION
