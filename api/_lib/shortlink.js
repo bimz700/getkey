@@ -8,7 +8,7 @@ import crypto from "node:crypto";
  *     https://DOMAIN-ANDA/get-key?access=<GETKEY_ACCESS_TOKEN>
  * GETKEY_ACCESS_TOKEN = Environment Variable Vercel (min. 16 karakter, acak, rahasia).
  */
-export const MANUAL_SHORT_LINK = "https://contoh-shortlink.com/xxxxx";
+export const MANUAL_SHORT_LINK = "https://sfl.gl/BFeVm8DP";
 
 /* Masa berlaku sesi GET KEY di memori halaman (setelah itu harus lewat Short Link lagi). */
 export const SESSION_TTL_MS = 30 * 60 * 1000;
