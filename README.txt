@@ -74,7 +74,7 @@ Limit seller (bisa diubah Owner per akun): default maks 365 hari dan 10 device p
 20 request pembuatan per jam per IP.
 Menghapus user tidak menghapus key miliknya. Menonaktifkan user: langsung ditolak server + akun Auth disabled.
 Rules: hanya ditambah index licenses.sellerId; /users, /licenses, /auditLogs tetap tertutup untuk klien.
-(Fitur Short Link menambah 1 environment variable: GETKEY_ACCESS_TOKEN, lihat bagian SHORT LINK.)
+(Fitur Short Link tidak butuh environment variable tambahan, lihat bagian SHORT LINK.)
 
 ==================== DATABASE (Firebase RTDB) ====================
 /keys/{KEY}        stok lama, TIDAK diubah secara destruktif. Field lama: status, maxDevices,
@@ -117,7 +117,7 @@ Semua secret hanya dari Vercel > Settings > Environment Variables (process.env.*
 Repository tidak berisi .env / .env.example / nilai credential.
 Wajib: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (baris baru boleh \n),
        FIREBASE_DATABASE_URL, ADMIN_EMAIL.
-Tambahan Short Link: GETKEY_ACCESS_TOKEN (acak, min. 16 karakter). firebase-config.js hanya config web PUBLIK untuk login admin.
+firebase-config.js hanya config web PUBLIK untuk login admin.
 
 ==================== DEPLOY ====================
 1. Pastikan 5 Environment Variables terisi di Vercel.
@@ -128,13 +128,15 @@ Tambahan Short Link: GETKEY_ACCESS_TOKEN (acak, min. 16 karakter). firebase-conf
 5. Setelah APK lama tidak dipakai, pasang database.rules.strict.json (tahap 2).
 
 ==================== SHORT LINK MANUAL (GATE /get-key) ====================
-Alur: Short Link -> /get-key?access=TOKEN -> halaman GET KEY. Hanya satu Short Link manual.
+Alur: /get-key -> Short Link (https://sfl.gl/BFeVm8DP) -> /get-key -> GET KEY tampil. Tanpa ?access=, tanpa token di URL.
 - URL Short Link: konstanta MANUAL_SHORT_LINK di api/_lib/shortlink.js (satu-satunya tempat ganti).
-- Env Vercel: GETKEY_ACCESS_TOKEN (acak, min. 16 karakter, mis. `openssl rand -hex 24`).
-- Tujuan akhir (destination) Short Link di dashboard penyedia: https://DOMAIN/get-key?access=<GETKEY_ACCESS_TOKEN>
-- /get-key tanpa token -> 302 ke MANUAL_SHORT_LINK. Token salah -> 403 (tanpa redirect otomatis).
-- Token valid -> sesi bertanda tangan (HMAC, 30 menit) hanya di memori halaman; URL dibersihkan
-  dengan history.replaceState. Refresh / tutup browser -> sesi hilang -> kembali ke Short Link.
-- POST /api/generate-key wajib header X-Gate-Session (sesi valid); GET status tidak berubah.
+- Destination Short Link di dashboard penyedia: https://DOMAIN/get-key (polos, tanpa parameter).
+- /get-key tanpa cookie pending -> set cookie gk_pending (HttpOnly, bertanda tangan HMAC, 30 menit) lalu 302 ke Short Link.
+- Kembali dari Short Link dengan cookie pending valid (min. 8 detik sejak redirect) -> cookie dihapus, sesi bertanda tangan
+  dikirim lewat hash (#s=...), dibaca get-key.js ke memori lalu dihapus dengan history.replaceState.
+- Refresh / tutup-buka lagi -> cookie sudah terpakai/hilang -> kembali ke Short Link. Kembali < 8 detik -> halaman 'belum selesai' (tanpa redirect).
+- POST /api/generate-key wajib header X-Gate-Session (sesi valid, TTL 30 menit); GET status tidak berubah.
 - Pengaman loop: maks 3 redirect ke Short Link per 60 detik, setelah itu halaman error.
-- Ganti token: ubah GETKEY_ACCESS_TOKEN + destination Short Link (redeploy).
+- Kunci tanda tangan diturunkan dari FIREBASE_PRIVATE_KEY. GETKEY_ACCESS_TOKEN TIDAK dipakai lagi (boleh dihapus dari Vercel).
+- Opsional: env GETKEY_REQUIRE_REFERER=1 menambah syarat Referer berasal dari host Short Link (aktifkan setelah dites; tidak semua provider mengirim Referer).
+- BATASAN: Short Link tanpa callback/parameter tidak bisa dibuktikan secara kriptografis; gate hanya membuktikan browser pernah dikirim ke Short Link dan kembali setelah jeda minimum.
