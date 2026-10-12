@@ -12,6 +12,9 @@ export const KEY_RE = /^[A-Z0-9][A-Z0-9_-]{2,100}$/;
 export const LOOSE_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{2,100}$/; // key lama yang mungkin bukan huruf besar
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 karakter, tanpa I/O/0/1
 
+// Durasi default 2 jam dalam milidetik (2 * 60 * 60 * 1000)
+const TWO_HOURS_MS = 2 * 3600 * 1000;
+
 export function normalizeKey(value) {
   return String(value || "").trim().toUpperCase();
 }
@@ -63,10 +66,7 @@ export async function findKey(...names) {
 const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
 /*
- * Kompatibilitas key lama: aplikasi Android lama menyimpan expiry PER DEVICE di
- * claims/{device}.expiredAt = claimedAt + durationDays. Itu hanya berlaku jika key
- * punya durationDays > 0 (klaim lama tanpa durationDays berisi expiredAt = waktu klaim,
- * yang TIDAK boleh dianggap kedaluwarsa).
+ * Perhitungan expiry per device diatur menjadi 2 jam sejak claimedAt.
  */
 function legacyDeviceExpiry(record, claim) {
   const days = Number(record?.durationDays || 0);
@@ -74,7 +74,7 @@ function legacyDeviceExpiry(record, claim) {
   const expiredAt = Number(claim?.expiredAt || 0);
   if (expiredAt > 0) return expiredAt;
   const claimedAt = Number(claim?.claimedAt || 0);
-  return claimedAt > 0 ? claimedAt + days * DAY_MS : 0;
+  return claimedAt > 0 ? claimedAt + TWO_HOURS_MS : 0;
 }
 
 function effectiveExpiry(record, deviceExpiry) {
@@ -94,10 +94,6 @@ function indexOfClaim(claims, id) {
 /*
  * Validasi + device binding dalam SATU transaction (atomic): dua request bersamaan
  * tidak bisa melewati maxDevices.
- * device = { hash, raw, model }. Claim lama yang tersimpan dengan ANDROID_ID mentah
- * (aplikasi lama menulis langsung) dikenali sebagai device yang sama, tanpa diubah.
- * Claim baru SELALU disimpan dengan hash.
- * Hasil: { code } saat ditolak, atau { code:null, bound, used, max, deviceIndex, expiresAt, val }.
  */
 export async function verifyAndBind(node, key, device, ip, now = Date.now()) {
   const ref = db.ref(`${node}/${key}`);
@@ -135,7 +131,7 @@ export async function verifyAndBind(node, key, device, ip, now = Date.now()) {
       const days = Number(current.durationDays || 0);
       const claim = { device: device.hash, ip, claimedAt: now, deviceIndex: used + 1 };
       if (device.model) claim.model = device.model;
-      if (days > 0) claim.expiredAt = now + days * DAY_MS;
+      if (days > 0) claim.expiredAt = now + TWO_HOURS_MS; // Diset tepat 2 jam dari waktu klaim
       verdict = { code: null, bound: true, used: used + 1, max, deviceIndex: used + 1, expiresAt: effectiveExpiry(current, claim.expiredAt || 0) };
       return { ...current, claims: { ...claims, [device.hash]: claim }, lastClaimAt: now };
     },
@@ -154,4 +150,5 @@ export async function createIfAbsent(node, key, record) {
   await ref.get();
   const result = await ref.transaction(current => (current === null ? record : undefined), undefined, false);
   return result.committed && result.snapshot.exists() && result.snapshot.val()?.createdAt === record.createdAt;
-}
+                     }
+                     
